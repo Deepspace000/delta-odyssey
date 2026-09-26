@@ -727,6 +727,7 @@ const SND={
       case 'ok': this.tone('square',660,1320,0.09,0.2); break;
       case 'deny': this.tone('square',140,110,0.14,0.25); break;
       case 'bomb': this.burst(1.2,5000,80,0.9); break;
+      case 'laser': this.tone('sawtooth',180,1400,0.5,0.35); this.tone('square',90,60,0.6,0.25); break;
       case 'coin': this.tone('square',990,990,0.05,0.2); this.tone('square',1320,1320,0.12,0.2,0.05); break;
     }
   }
@@ -1353,15 +1354,24 @@ const PB=H-24; // bottom of the playfield; the power-up strip sits below it
 const WEAPONS=['pulse','spread','laser','homing','wave'];
 const WNAME={pulse:'Pulse',spread:'Spread',laser:'Laser',homing:'Homing',wave:'Wave'};
 const PICKS={shield:{b:122,c:13},cash:{b:126,c:7},bomb:{b:125,c:10}};
+// the power strip, cheapest first; w = how much each level adds to the heat score
 const POWERS=[
-  {id:'speed',name:'Speed up',icon:128,max:4},
-  {id:'twin',name:'Twin shot',icon:122,max:1},
-  {id:'rear',name:'Rear shot',icon:135,max:1},
-  {id:'pierce',name:'Pierce',icon:132,max:1},
-  {id:'option',name:'Option drone',icon:136,max:2},
-  {id:'field',name:'Force field',icon:139,max:1},
-  {id:'nova',name:'Nova blast',icon:123,max:99},
+  {id:'speed',name:'Speed up',icon:128,max:4,w:0.5},
+  {id:'twin',name:'Twin shot',icon:122,max:1,w:1},
+  {id:'rear',name:'Rear shot',icon:135,max:1,w:0.8},
+  {id:'spray',name:'Colour spray',icon:131,max:2,w:1.2},
+  {id:'bombs',name:'Up-down bombs',icon:141,max:1,w:1},
+  {id:'pierce',name:'Pierce',icon:132,max:1,w:1},
+  {id:'option',name:'Option drone',icon:136,max:2,w:1.5},
+  {id:'drones',name:'Drone squad',icon:138,max:1,w:2},
+  {id:'orbs',name:'Double orb',icon:137,max:1,w:1.5},
+  {id:'ghost',name:'Ghost ship',icon:124,max:1,w:2.5},
+  {id:'field',name:'Force field',icon:139,max:1,w:0.8},
+  {id:'mega',name:'Mega laser',icon:133,max:1,w:3},
+  {id:'nova',name:'Nova blast',icon:123,max:99,w:0},
 ];
+const SPRAYC=[2,7,5,14,4,3,10,13,8];
+const HEATNAME=['','Heat rising','Swarm incoming','Bullet storm!'];
 // scenes per level: A | B1 B2 | C1-C4 | D1-D4 | guardian
 // s space, i floating islands, o planet in the background, f surface, c canyon, w ocean, x inside a structure
 const SCENES=['s|ii|oooo|wxcf|x','s|ii|oooo|iwxw|x','s|ii|oooo|ffcf|x','s|ii|oooo|fxfc|x','s|ii|oooo|wcww|x','s|ii|oooo|wcwc|x','s|ii|oooo|fcfc|x'].map(s=>s.replace(/\|/g,''));
@@ -1378,7 +1388,7 @@ const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:0,alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
-  bar:-1,pw:{speed:0,twin:0,rear:0,pierce:0,option:0,field:0,nova:0},field:0,trail:[]};}
+  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0};}
 function ownedWeapons(){return WEAPONS.filter(w=>G.wep[w]);}
 
 // ---------- terrain ----------
@@ -1463,7 +1473,7 @@ function buildLevel(pi,node){
   L.pl=[makePlayer(0)]; if(G.coop)L.pl.push(makePlayer(1));
   const run=G.planets[pi].run; // powers carry along the route until the guardian
   if(run&&run.pw)for(const p of L.pl){const s=run.pw[p.id]; if(s){Object.assign(p.pw,s.pw); p.bar=s.bar; p.field=s.field||0;}}
-  L.podTick=0;
+  L.podTick=0; L.heat=0; L.heat=heatOf(L);
   for(const p of L.pl)p.y=(L.yTop+L.yBot)/2+(p.id?20:0);
   return L;
 }
@@ -1474,7 +1484,7 @@ function spawnForm(L,ev){
   const closed=SCENE[L.sc].ceil||SCENE[L.sc].floor||SCENE[L.sc].water;
   if(pat==='dive'&&SCENE[L.sc].ceil)pat='sine';
   const span=L.yBot-L.yTop; const amp=Math.min(18+r()*34,span/2-6), w=0.035+r()*0.035;
-  let y0=L.yTop+8+r()*(span-16); if(pat==='sine')y0=clamp(y0,L.yTop+amp,L.yBot-amp);
+  let y0=L.yTop+8+r()*(span-16); if(ev.mirror)y0=L.yTop+L.yBot-y0; if(pat==='sine')y0=clamp(y0,L.yTop+amp,L.yBot-amp);
   const cx=W*(0.45+r()*0.25), R=Math.min(28+r()*16,span/2-4), top=closed?true:r()<0.5;
   if(pat==='loop')y0=clamp(y0,L.yTop+R,L.yBot-R);
   const fid=++L.fid; L.forms[fid]={n:ev.n,k:0};
@@ -1520,7 +1530,7 @@ function spawnJumpers(L,n){
     x:W*(0.45+r()*0.45)+i*14,y:wy+6,vx:-(0.5+L.scroll*0.3),vy:-(4.2+r()*1.3)*Math.sqrt(L.sm),ex:true,wy});
 }
 function spawnMini(L){
-  const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5);
+  const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5)*(1+L.heat*0.3);
   L.en.push({mini:true,pat:'miniboss',type:'mini',cells:MINIART[L.pi],c:P.shades[1]===1?P.shades[2]:P.shades[1],x:W+30,y:(L.yTop+L.yBot)/2,tx:W-70,
     hp,maxhp:hp,rad:18,val:60,fc:100,t:0,delay:0,flash:0,ex:true,shot:0});
   toast('A heavy ship moves in',90);
@@ -1536,7 +1546,7 @@ function makeBoss(L,mini){
   const w=cols*24,h=rows*21;
   const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?50:110)+d*(mini?14:32))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
     c:P.shades[1]===1?14:P.shades[1],vuln:false,flash:0,turrets:[],core:art.core};
-  B.maxhp=B.hp;
+  B.hp*=1+L.heat*0.3; B.maxhp=B.hp;
   const tpos=art.tur;
   const pool=NEW_BY_PLANET[L.pi];
   for(const [ox,oy] of tpos){
@@ -1553,22 +1563,45 @@ function aimShot(L,x,y,spd,spread=0){
   const a=Math.atan2(tgt.y-y,tgt.x-x)+spread; spd*=1+L.ng*0.25; L.eb.push({x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:0});
 }
 function optionPos(p,k){const i=p.trail.length-1-(k+1)*14; return i>=0?p.trail[i]:{x:p.x-(k+1)*14,y:p.y};}
-function fireWeapon(L,p){
-  const ws=ownedWeapons(); if(p.w>=ws.length)p.w=0; const w=ws[p.w];
-  const pw=G.power; const x=p.x+10, y=p.y, start=L.pb.length;
+function mainPattern(L,p,x,y,mul){
+  const ws=ownedWeapons(); if(p.w>=ws.length)p.w=0; const w=ws[p.w], pw=G.power, start=L.pb.length;
   const shot=(o)=>L.pb.push(Object.assign({x,y,vx:7,vy:0,dmg:1,kind:w,t:0,pierce:false,r:3,owner:p.id},o));
+  let cool=8;
   switch(w){
-    case 'pulse': {const n=pw>=4?3:pw>=2?2:1, offs=[[0],[-3,3],[-5,0,5]][n-1]; offs.forEach(o=>shot({y:y+o,vx:7.5})); p.cool=Math.max(5,10-pw); break;}
-    case 'spread': {const n=[3,3,5,5,7][pw-1]; for(let i=0;i<n;i++){const a=(i-(n-1)/2)*0.13; shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:0.8});} p.cool=13-pw; break;}
-    case 'laser': shot({vx:10,dmg:1.1+pw*0.3,pierce:true,r:4,h:pw>2?2:1}); p.cool=14-pw; break;
-    case 'homing': {const n=pw>=4?3:pw>=2?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2,r:4}); p.cool=24-pw*2; break;}
-    case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2,r:6,ph:s,y0:y}); p.cool=11-pw; break;
+    case 'pulse': {const n=pw>=4?3:pw>=2?2:1, offs=[[0],[-3,3],[-5,0,5]][n-1]; offs.forEach(o=>shot({y:y+o,vx:7.5})); cool=Math.max(5,10-pw); break;}
+    case 'spread': {const n=[3,3,5,5,7][pw-1]; for(let i=0;i<n;i++){const a=(i-(n-1)/2)*0.13; shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:0.8});} cool=13-pw; break;}
+    case 'laser': shot({vx:10,dmg:1.1+pw*0.3,pierce:true,r:4,h:pw>2?2:1}); cool=14-pw; break;
+    case 'homing': {const n=pw>=4?3:pw>=2?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2,r:4}); cool=24-pw*2; break;}
+    case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2,r:6,ph:s,y0:y}); cool=11-pw; break;
   }
-  if(p.pw.twin){for(const a of[-0.33,0.33])shot({kind:'pulse',vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:0.8});}
-  if(p.pw.rear)shot({kind:'pulse',x:p.x-10,vx:-7});
-  for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); shot({kind:'pulse',x:o.x+8,y:o.y,vx:7.5});}
+  if(mul!==1)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=mul;
+  return cool;
+}
+function fireWeapon(L,p){
+  const start=L.pb.length, x=p.x+10, y=p.y;
+  p.cool=mainPattern(L,p,x,y,1);
+  if(p.pw.ghost)mainPattern(L,p,p.gx+10,p.gy,0.7);
+  const shot=(o)=>L.pb.push(Object.assign({x,y,vx:7,vy:0,dmg:1,kind:'pulse',t:0,pierce:false,r:3,owner:p.id},o));
+  if(p.pw.twin){for(const a of[-0.33,0.33])shot({vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:0.8});}
+  if(p.pw.rear)shot({x:p.x-10,vx:-7});
+  if(p.pw.spray){const n=p.pw.spray>1?5:3; for(let i=0;i<n;i++){const a=(L.r()-0.5)*1.3, s=5+L.r()*2.5; shot({kind:'spray',vx:Math.cos(a)*s,vy:Math.sin(a)*s,dmg:0.6,col:SPRAYC[Math.floor(L.r()*SPRAYC.length)],r:2});}}
+  for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); shot({x:o.x+8,y:o.y,vx:7.5});}
   if(p.pw.pierce)for(let i=start;i<L.pb.length;i++){L.pb[i].pierce=true;L.pb[i].dmg*=1.15;}
   SND.sfx('shot');
+}
+function blast(L,x,y,rad,dmg){
+  L.fx.push({x,y,t:0,big:false}); SND.sfx('boom');
+  for(const e of L.en) if(!e.dead&&e.delay<=0&&dist2(x,y,e.x,e.y)<(rad+e.rad)*(rad+e.rad))damageEnemy(L,e,dmg);
+  const B=L.boss; if(B&&!B.dead&&B.vuln&&Math.abs(x-B.x)<B.w/2+rad&&Math.abs(y-B.y)<B.h/2+rad){B.hp-=dmg;B.flash=3;}
+}
+function dronePos(L,p,k){const a=L.t*0.03+k*TAU/3; return {x:p.x-4+Math.cos(a)*26,y:p.y+Math.sin(a)*20};}
+function orbPos(p,k){const a=p.oa+k*Math.PI; return {x:p.x+Math.cos(a)*18,y:p.y+Math.sin(a)*14};}
+// the stronger the player, the hotter the level: more enemies, more bullets
+function heatOf(L){
+  let best=0;
+  for(const p of L.pl){ if(!p.alive)continue; let s=(G.power-1)*0.5; for(const P of POWERS)s+=(p.pw[P.id]||0)*P.w; best=Math.max(best,s); }
+  if(L.pl.length>1)best+=1;
+  return best<3?0:best<6?1:best<10?2:3;
 }
 function nova(L){
   SND.sfx('bomb'); L.flash=18; L.eb.length=0;
@@ -1595,7 +1628,7 @@ function hurtPlayer(L,p){
 function killEnemy(L,e){
   e.dead=true; boom(L,e.x,e.y,!!e.mini);
   if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
-  const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
+  const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08)*(1+L.heat*0.25))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
   questEvent(e.rock?'rock':'kill',L.pi,L.node.id);
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
   if(e.cannon&&L.r()<0.2)podChance(L,e.x,e.y);
@@ -1657,7 +1690,7 @@ function updateEnemy(L,e){
   if(e.ex&&(e.x<-40||e.x>W+50||e.y<-50||e.y>H+40))e.dead=true;
   if(!e.rock&&e.pat!=='jump'&&(L.d>=2||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
     e.fc=Math.max(50,(e.turret?110:320-L.d*20))*(e.elite?0.55:1)*(0.7+L.r()*0.6)/(1+L.ng*0.4);
-    aimShot(L,e.x,e.y,1.5+L.d*0.14); } }
+    e.fc/=(1+L.heat*0.5); const n=L.heat>=3?5:L.heat>=2?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
 }
 
 function updateBoss(L){
@@ -1674,7 +1707,7 @@ function updateBoss(L){
     if(kind==='ring'){const n=10+d*2; for(let i=0;i<n;i++){const a=i/n*TAU+B.t; L.eb.push({x:B.x,y:B.y,vx:Math.cos(a)*1.6*L.sm,vy:Math.sin(a)*1.6*L.sm,t:0});}}
     if(kind==='fan'){const n=5+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.9+d*0.1,(i-(n-1)/2)*0.16);}
     if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
-    B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3);
+    B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3)/(1+L.heat*0.25);
   }
   if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?120:300)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
 }
@@ -1732,23 +1765,24 @@ function drawPowerBar(L){
   rect(0,PB,W,H-PB,0); rect(0,PB,W,1,11);
   const p0=L.pl[0], p1=L.pl[1];
   POWERS.forEach((P,i)=>{
-    const x=16+i*25, y=PB+12, c0=p0&&p0.bar===i, c1=p1&&p1.bar===i, maxed=p0&&P.id!=='nova'&&p0.pw[P.id]>=P.max;
+    const x=13+i*22, y=PB+12, c0=p0&&p0.bar===i, c1=p1&&p1.bar===i, maxed=p0&&P.id!=='nova'&&p0.pw[P.id]>=P.max;
     ctx.globalAlpha=maxed&&!c0?0.35:1;
     spr(P.icon,x,y,c0?((L.t>>3)&1?7:1):14,{mc1:c0?1:12}); ctx.globalAlpha=1;
-    if(c1)frame(x-13,y-11,26,23,13);
-    if(p0&&P.id!=='nova')for(let k=0;k<p0.pw[P.id];k++)rect(x-10+k*4,PB+2,3,2,13);
-    hit(x-12,PB,25,24,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
+    if(c1)frame(x-12,y-11,24,23,13);
+    if(p0&&P.id!=='nova')for(let k=0;k<p0.pw[P.id];k++)rect(x-9+k*4,PB+2,3,2,13);
+    hit(x-11,PB,22,24,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
   });
-  L.pl.forEach((p,i)=>{
-    const x=190+i*98, ws=ownedWeapons();
-    txt((L.pl.length>1?(i?'P2 ':'P1 '):'')+WNAME[ws[Math.min(p.w,ws.length-1)]],x,PB+3,p.c,6);
-    for(let s=0;s<G.shield+2;s++)rect(x+(L.pl.length>1?48:58)+s*5,PB+5,4,4,s<p.shield?13:11);
-    if(L.pl.length===1)txt('B'+p.bombs,x+96,PB+3,10,6);
-    const cur=p.bar>=0?POWERS[p.bar]:null, mx=cur&&cur.id!=='nova'&&p.pw[cur.id]>=cur.max;
-    txt(cur?(cur.name+(mx?' (max)':'')+(L.pl.length>1?'':TOUCH.on?'  tap Power':(i?'  J to take':'  V to take'))):(L.pl.length>1?'':'Powers carry to the guardian'),x,PB+13,cur?(mx?11:7):11,5);
-  });
+  // name of the highlighted power, just above its panel
+  for(const p of L.pl){ if(p.bar<0)continue; const P=POWERS[p.bar], mx=P.id!=='nova'&&p.pw[P.id]>=P.max, lx=clamp(13+p.bar*22,40,W-60);
+    const label=P.name+(mx?' (max)':'')+(L.pl.length>1?(p.id?' P2':' P1'):'');
+    rect(lx-label.length*2.3-3,PB-10,label.length*4.6+6,9,0); txt(label,lx,PB-9,mx?11:(p.id?13:7),5,'center'); }
+  const x=300, ws=ownedWeapons();
+  L.pl.forEach((p,i)=>{const y=PB+3+i*10;
+    txt((L.pl.length>1?(i?'2 ':'1 '):'')+WNAME[ws[Math.min(p.w,ws.length-1)]],x,y,p.c,5);
+    for(let s=0;s<G.shield+2;s++)rect(x+40+s*4,y+2,3,3,s<p.shield?13:11);
+    txt('B'+p.bombs,W-4,y,10,5,'right');});
+  if(L.pl.length===1)txt(p0&&p0.bar>=0?(TOUCH.on?'Tap Power':'V to take'):'Pods charge it',x,PB+13,11,5);
 }
-
 ST.level={
   enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; this.a=a; tune(a.node.type==='boss'?TUNES.boss:TUNES.level);},
   update(){
@@ -1756,9 +1790,11 @@ ST.level={
     if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; SND.sfx('sel');}
     if(L.pause){ if(KP.KeyQ){go('map');} return; }
     if(KP.KeyM)toggleMusic();
+    if(L.t%30===0){const h=heatOf(L); if(h>L.heat)toast(HEATNAME[h],100); L.heat=h;}
+    if(L.heat>=3&&L.t%240===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; for(let i=0;i<12;i++){const a=i/12*TAU+L.t; L.eb.push({x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
     L.t++; L.wx+=L.scroll; if(L.shake)L.shake--; if(L.flash)L.flash--; if(L.intro>0)L.intro--;
     while(L.ev.length&&L.ev[0].t<=L.t){const ev=L.ev.shift();
-      if(ev.kind==='form')spawnForm(L,ev);
+      if(ev.kind==='form'){const h=L.heat, e2=Object.assign({},ev,{n:ev.n+h*2}); spawnForm(L,e2); if(h&&L.r()<h*0.33)spawnForm(L,Object.assign({},e2,{pat:pick(L.r,['sine','line','swoop']),mirror:true}));}
       else if(ev.kind==='rocks'){for(let i=0;i<ev.n;i++)spawnRock(L);}
       else if(ev.kind==='meteors'){for(let i=0;i<ev.n;i++)spawnMeteor(L,i*18);}
       else if(ev.kind==='island')spawnIsland(L,ev.cannon);
@@ -1790,6 +1826,19 @@ ST.level={
       if(c.swP){const n=ownedWeapons().length; p.w=(p.w+1)%n; SND.sfx('sel');}
       if(c.bombP)useBomb(L,p);
       if(c.pwP)activatePower(L,p);
+      const firing=c.fire||tf;
+      if(p.pw.ghost){const mid=(L.yTop+L.yBot)/2, ty=p.y+(p.y>mid?-30:30); p.gx+=(p.x-6-p.gx)*0.15; p.gy+=(ty-p.gy)*0.15;}
+      if(p.pw.orbs){p.oa+=0.11; for(let k=0;k<2;k++){const o=orbPos(p,k);
+        for(const e of L.en)if(!e.dead&&e.delay<=0&&dist2(o.x,o.y,e.x,e.y)<(e.rad+5)*(e.rad+5)&&!(L.t%4))damageEnemy(L,e,0.6);
+        for(const b of L.eb)if(!b.dead&&dist2(o.x,o.y,b.x,b.y)<30)b.dead=true;}}
+      if(p.pw.bombs&&firing&&--p.bt<=0){p.bt=36; for(const s of[-1,1])L.pb.push({x:p.x,y:p.y+s*4,vx:1.1,vy:s*1.2,ay:s*0.12,kind:'lob',dmg:2.5,r:4,t:0,owner:p.id,blast:18});}
+      if(p.pw.drones&&--p.dt<=0){p.dt=28; let best=null,bd=1e9; for(const e of L.en){if(e.dead||e.delay>0||e.x>W)continue; const d=dist2(p.x,p.y,e.x,e.y); if(d<bd){bd=d;best=e;}}
+        if(best)for(let k=0;k<3;k++){const o=dronePos(L,p,k), a=Math.atan2(best.y-o.y,best.x-o.x); L.pb.push({x:o.x,y:o.y,vx:Math.cos(a)*5,vy:Math.sin(a)*5,dmg:0.8,kind:'dpel',r:2,t:0,owner:p.id});}}
+      if(p.pw.mega){ if(p.beam>0){p.beam--; const B=L.boss;
+          for(const e of L.en)if(!e.dead&&e.delay<=0&&e.x>p.x&&Math.abs(e.y-p.y)<5+e.rad*0.7)damageEnemy(L,e,0.4);
+          if(B&&!B.dead&&B.vuln&&Math.abs(B.y-p.y)<B.h/2)B.hp-=0.4;
+          for(const b of L.eb)if(b.x>p.x&&Math.abs(b.y-p.y)<6)b.dead=true; }
+        else if(++p.mt>=150&&firing){p.mt=0; p.beam=34; SND.sfx('laser');} }
     }
     // bullets
     for(const b of L.pb){
@@ -1799,9 +1848,10 @@ ST.level={
         if(best){const a=Math.atan2(best.y-b.y,best.x-b.x),s=Math.min(6,Math.hypot(b.vx,b.vy)+0.15), cur=Math.atan2(b.vy,b.vx); let da=a-cur; while(da>Math.PI)da-=TAU; while(da<-Math.PI)da+=TAU;
           const na=cur+clamp(da,-0.12,0.12); b.vx=Math.cos(na)*s; b.vy=Math.sin(na)*s;} else b.vx+=0.1;
         if(b.t%3===0)L.fx.push({x:b.x-3,y:b.y,t:0,puff:true});}
+      if(b.ay)b.vy+=b.ay;
       b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25)*10*b.ph; else b.y+=b.vy;
       if(b.x>W+20||b.x<-20||b.y<-10||b.y>H+10||b.t>200)b.dead=true;
-      else if(terrainHit(L,b.x,b.y,1)||(L.so.length&&solidHit(L,b.x,b.y,2))){b.dead=true; L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
+      else if(terrainHit(L,b.x,b.y,1)||(L.so.length&&solidHit(L,b.x,b.y,2))){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
     }
     for(const b of L.eb){b.x+=b.vx;b.y+=b.vy;b.t++; if(b.x<-10||b.x>W+10||b.y<-10||b.y>H+10||terrainHit(L,b.x,b.y,0))b.dead=true;}
     for(const e of L.en)if(!e.dead)updateEnemy(L,e);
@@ -1811,6 +1861,7 @@ ST.level={
       for(const e of L.en){ if(e.dead||e.delay>0)continue; const rr=e.rad+b.r;
         if(dist2(b.x,b.y,e.x,e.y)<rr*rr||(b.kind==='laser'&&dist2(b.x-12,b.y,e.x,e.y)<rr*rr)){
           if(b.hits&&b.hits.includes(e))continue;
+          if(b.blast){b.dead=true; blast(L,b.x,b.y,b.blast,b.dmg); break;}
           damageEnemy(L,e,b.dmg); if(b.pierce)(b.hits=b.hits||[]).push(e); else {b.dead=true;break;} } }
       const B=L.boss; if(!b.dead&&B&&!B.dead&&Math.abs(b.x-B.x)<B.w/2&&Math.abs(b.y-B.y)<B.h/2){
         b.dead=true; if(B.vuln){B.hp-=b.dmg;B.flash=3;} else {SND.sfx('clink'); L.fx.push({x:b.x,y:b.y,t:0,spark:true});}}
@@ -1877,12 +1928,20 @@ ST.level={
         case 'laser': rect(b.x-14,b.y-(b.h>1?1:0),18,b.h>1?3:1,3); rect(b.x-10,b.y,14,1,1); break;
         case 'homing': rect(b.x-2,b.y-1,5,2,7); rect(b.x+2,b.y-1,1,2,1); break;
         case 'wave': rect(b.x-2,b.y-3,4,6,4); rect(b.x-1,b.y-2,2,4,10); break;
+        case 'spray': rect(b.x-1,b.y-1,2,2,b.col); rect(b.x-b.vx*0.6,b.y-b.vy*0.6,1,1,b.col); break;
+        case 'dpel': rect(b.x-1,b.y-1,2,2,13); break;
+        case 'lob': rect(b.x-2,b.y-2,4,4,10); rect(b.x-1,b.y-1,2,2,1); break;
       }}
     for(const b of L.eb){rect(b.x-1,b.y-1,3,3,(b.t>>2)&1?10:1);}
     for(const p of L.pl){ if(!p.alive)continue;
       for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); spr(OPTF[(L.t>>2)%OPTF.length],o.x,o.y,(L.t>>3)&1?7:10,{mc1:1});}
       if(p.inv&&(p.inv>>2)%2)continue;
       spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
+      if(p.pw.ghost){ctx.globalAlpha=0.45; spr(shipFrame(L.t+4),p.gx,p.gy,3); ctx.globalAlpha=1;}
+      if(p.pw.drones)for(let k=0;k<3;k++){const o=dronePos(L,p,k); rect(o.x-2,o.y-1,5,3,13); rect(o.x-1,o.y-2,3,5,13); rect(o.x,o.y,1,1,(L.t>>3)&1?1:5);}
+      if(p.pw.orbs)for(let k=0;k<2;k++){const o=orbPos(p,k); rect(o.x-3,o.y-2,6,4,7); rect(o.x-2,o.y-3,4,6,7); rect(o.x-1,o.y-1,2,2,(L.t>>2)&1?1:8);}
+      if(p.pw.mega){ if(p.beam>0){const f=(L.t>>1)&1, x0=p.x+12; rect(x0,p.y-4,W-x0,9,f?14:6); rect(x0,p.y-2,W-x0,5,3); rect(x0,p.y-1,W-x0,3,1);}
+        else if(p.mt>115&&((L.t>>1)&1)){rect(p.x+12,p.y-2,4,5,3); rect(p.x+13,p.y-1,2,3,1);} }
       if(p.field>0){ctx.strokeStyle=PAL[(L.t>>1)&1?3:1]; ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,15,12,0,0,TAU); ctx.stroke();}
     }
     for(const f of L.fx){
@@ -1898,9 +1957,10 @@ ST.level={
     const P=PLANETS[L.pi]; if(L.ng)txt('NG+'+L.ng,122,2,10,6); txt(P.name+': '+L.node.name,4,2,P.shades[2]===1?P.shades[1]:P.shades[2],6);
     if(L.intro>0){ if(L.intro>20||(L.intro&2)){txt(L.node.name,W/2,H/2-40,1,14,'center'); txt(L.node.desc,W/2,H/2-18,15,6,'center');}}
     const prog=Math.min(1,L.t/L.len);
+    txt('Heat',318,2,11,5); for(let k=0;k<3;k++)rect(338+k*6,4,4,4,k<L.heat?[7,8,2][k]:11);
     if(B&&!B.dead){rect(150,3,80,6,11); rect(150,3,80*Math.max(0,B.hp/B.maxhp),6,B.vuln?2:12); if(!B.vuln)txt('Turrets first',234,2,12,6);}
     else {rect(160,4,70,4,11); rect(160,4,70*prog,4,5);}
-    txt('Ships '+G.ships+'   Credits '+G.credits,W-4,2,7,6,'right');
+    txt('Ships '+G.ships,238,2,15,6); txt('Cr '+G.credits,W-4,2,7,6,'right');
     drawPowerBar(L);
     if(L.pause){frame(W/2-90,H/2-30,180,60,7,0); txt('Paused',W/2,H/2-24,1,10,'center');
       frame(W/2-80,H/2,72,16,5,0); txt('Resume',W/2-44,H/2+4,13,7,'center'); hit(W/2-82,H/2-2,76,20,()=>{KP.Escape=true;});
