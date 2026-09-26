@@ -104,7 +104,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.78</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.79</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -422,32 +422,67 @@ class SID{
     return s;
   }
 }
-// ===== Music: runs the original music code in the 6502 and feeds the SID =====
+// ===== Music: runs the original music code in a 6502 and feeds the SID.
+// Preferred: an AudioWorklet, so the music runs on the audio thread and never stutters when the game is busy.
+// Fallback: a ScriptProcessor on the main thread (older browsers).
+function musicWorkletSource(){
+  return 'const SID_ATK='+JSON.stringify(SID_ATK)+';\n'+CPU6502.toString()+'\n'+C64.toString()+'\n'+SID.toString()+'\n'+`
+class DeltaMusic extends AudioWorkletProcessor{
+  constructor(){ super(); this.m=null; this.sid=new SID(sampleRate); this.spf=sampleRate/50; this.left=0; this.tune=-1; this.on=true; this.saved0=null;
+    this.port.onmessage=e=>{ const d=e.data;
+      if(d.ram){ this.m=C64(); this.m.ram.set(d.ram); this.m.ram[1]=0x35; this.m.sidWrites=[]; }
+      if('on' in d){ this.on=d.on; if(!d.on)this.sid.reset(); }
+      if(d.stopLong)this.saved0=null;
+      if('tune' in d)this.play(d.tune); }; }
+  apply(){ const w=this.m.sidWrites; for(let k=0;k<w.length;k+=2)this.sid.write(w[k],w[k+1]); w.length=0; }
+  play(t){ if(!this.m||t===this.tune)return;
+    if(this.tune===0)this.saved0={ram:this.m.ram.slice(),r:this.sid.r.slice(),v:this.sid.v.map(v=>Object.assign({},v))};
+    this.tune=t;
+    if(t===0&&this.saved0){ const s=this.saved0; this.m.ram.set(s.ram); this.sid.r.set(s.r); this.sid.v.forEach((v,i)=>Object.assign(v,s.v[i])); return; }
+    this.sid.reset(); this.m.sidWrites.length=0; this.m.call(0xc357,t); this.apply(); }
+  process(inputs,outputs){ const out=outputs[0], L=out[0], R=out[1]||out[0];
+    for(let i=0;i<L.length;i++){
+      if(this.left<=0){ this.left+=this.spf; if(this.m&&this.on&&this.tune>=0){ this.m.call(0xbde4,0); this.apply(); } }
+      this.left--; const s=this.on?this.sid.sample():0; L[i]=s; if(R!==L)R[i]=s; }
+    return true; }
+}
+registerProcessor('delta-music',DeltaMusic);`;
+}
 const Music={
-  m:null, sid:null, tune:-1, on:true, frameLeft:0, ready:false,
+  m:null, sid:null, tune:-1, on:true, frameLeft:0, ready:false, inited:false, pending:-1, worklet:null, saved0:null,
   init(ac, ram, dest){
-    this.m=C64(); this.m.ram.set(ram); this.m.ram[1]=0x35; this.m.sidWrites=[];
-    this.sid=new SID(ac.sampleRate); this.spf=ac.sampleRate/50;
-    const node=ac.createScriptProcessor(2048,0,2);
-    node.onaudioprocess=e=>this.fill(e); node.connect(dest); this.node=node; this.ready=true;
+    if(this.inited)return; this.inited=true; this.ac=ac; this.ram=ram; this.dest=dest;
+    const done=()=>{ this.ready=true; if(this.pending>=0){const t=this.pending; this.pending=-1; this.play(t);} };
+    if(ac.audioWorklet&&typeof AudioWorkletNode!=='undefined'){
+      const url=URL.createObjectURL(new Blob([musicWorkletSource()],{type:'application/javascript'}));
+      ac.audioWorklet.addModule(url).then(()=>{
+        const n=new AudioWorkletNode(ac,'delta-music',{numberOfInputs:0,numberOfOutputs:1,outputChannelCount:[2]});
+        n.connect(dest); n.port.postMessage({ram:new Uint8Array(ram),on:this.on}); this.worklet=n; done();
+      }).catch(err=>{ console.warn('worklet failed, using fallback',err); this.initSP(); done(); });
+    } else { this.initSP(); done(); }
+  },
+  initSP(){
+    this.m=C64(); this.m.ram.set(this.ram); this.m.ram[1]=0x35; this.m.sidWrites=[];
+    this.sid=new SID(this.ac.sampleRate); this.spf=this.ac.sampleRate/50;
+    const node=this.ac.createScriptProcessor(4096,0,2); node.onaudioprocess=e=>this.fill(e); node.connect(this.dest); this.node=node;
   },
   play(t){
-    if(!this.ready||t===this.tune)return;
-    // the long in-game track (tune 0) carries on from where it stopped instead of restarting every level
+    if(!this.ready){this.pending=t; return;}
+    if(t===this.tune)return;
+    if(this.worklet){ this.tune=t; this.worklet.port.postMessage({tune:t}); return; }
     if(this.tune===0)this.saved0={ram:this.m.ram.slice(),r:this.sid.r.slice(),v:this.sid.v.map(v=>Object.assign({},v))};
     this.tune=t;
     if(t===0&&this.saved0){const s=this.saved0; this.m.ram.set(s.ram); this.sid.r.set(s.r); this.sid.v.forEach((v,i)=>Object.assign(v,s.v[i])); return;}
-    this.sid.reset(); this.m.sidWrites.length=0;
-    this.m.call(0xc357,t); this.applyWrites();
+    this.sid.reset(); this.m.sidWrites.length=0; this.m.call(0xc357,t); this.applyWrites();
   },
+  setOn(v){ this.on=v; if(this.worklet)this.worklet.port.postMessage({on:v}); else if(!v&&this.sid)this.sid.reset(); },
+  stopLong(){ this.saved0=null; if(this.worklet)this.worklet.port.postMessage({stopLong:true}); },
   applyWrites(){const w=this.m.sidWrites; for(let k=0;k<w.length;k+=2)this.sid.write(w[k],w[k+1]); w.length=0;},
   fill(e){
     const L=e.outputBuffer.getChannelData(0), R=e.outputBuffer.getChannelData(1);
     for(let i=0;i<L.length;i++){
-      if(this.frameLeft<=0){ this.frameLeft+=this.spf;
-        if(this.on&&this.tune>=0){ this.m.call(0xbde4,0); this.applyWrites(); } }
-      this.frameLeft--;
-      const s=this.on?this.sid.sample():0; L[i]=s; R[i]=s;
+      if(this.frameLeft<=0){ this.frameLeft+=this.spf; if(this.on&&this.tune>=0){ this.m.call(0xbde4,0); this.applyWrites(); } }
+      this.frameLeft--; const s=this.on?this.sid.sample():0; L[i]=s; R[i]=s;
     }
   }
 };
@@ -610,7 +645,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='1.78';
+const VERSION='1.79';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -715,7 +750,7 @@ const MENU={
 const SND={
   ac:null, music:null, sfxG:null, noise:null, sfxOn:true, lastShot:0,
   unlock(){
-    if(this.ac){ if(this.ac.state!=='running')this.ac.resume(); this.kick(); return; }
+    if(this.ac){ if(this.ac.state!=='running'&&this.ac.state!=='closed')this.ac.resume(); this.kick(); return; }
     if(!RAM)return;
     try{
       const AC=window.AudioContext||window.webkitAudioContext; this.ac=new AC();
@@ -723,17 +758,16 @@ const SND={
       this.sfxG=this.ac.createGain(); this.sfxG.gain.value=0.28; this.sfxG.connect(this.ac.destination);
       const n=this.ac.createBuffer(1,this.ac.sampleRate,this.ac.sampleRate), d=n.getChannelData(0);
       for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1; this.noise=n;
-      Music.init(this.ac,RAM,this.music); Music.on=G.musicOn!==false;
+      Music.on=G.musicOn!==false; Music.init(this.ac,RAM,this.music);
       if(wantTune>=0)Music.play(wantTune);
       this.kick();
     }catch(e){console.warn(e);}
   },
   // iPhone/iPad: start sound inside the tap, and ask for 'playback' audio so the silent switch doesn't mute the game
-  kick(){
+  kick(){ // once, inside the first tap: ask iOS for 'playback' audio (plays with the silent switch on) and start the sound hardware
+    if(this.kicked||!this.ac)return; this.kicked=true;
     try{ if(navigator.audioSession)navigator.audioSession.type='playback'; }catch(e){}
     try{ const b=this.ac.createBuffer(1,1,22050), s=this.ac.createBufferSource(); s.buffer=b; s.connect(this.ac.destination); s.start(0); }catch(e){}
-    try{ if(!this.tag){ this.tag=document.createElement('audio'); this.tag.setAttribute('playsinline',''); this.tag.loop=true; this.tag.volume=0.01; this.tag.src='data:audio/wav;base64,UklGRsQPAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YaAPAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA'; }
-      const pr=this.tag.play(); if(pr&&pr.catch)pr.catch(()=>{}); }catch(e){}
   },
   get live(){return !!(this.ac&&this.ac.state==='running');},
   tone(type,f0,f1,dur,vol=0.5,delay=0){
@@ -749,7 +783,9 @@ const SND={
     s.connect(f);f.connect(g);g.connect(this.sfxG); s.start(t); s.stop(t+dur);
   },
   sfx(k){
-    if(!this.ac||!this.sfxOn)return;
+    if(!this.ac||!this.sfxOn||this.ac.state!=='running')return;
+    if(this.sfxTick!==tickCount){this.sfxTick=tickCount;this.sfxN=0;} if(++this.sfxN>2&&k!=='alarm'&&k!=='fanfare')return;
+    if((k==='boom'||k==='hit'||k==='clink')&&tickCount-(this['last_'+k]||-99)<5)return; this['last_'+k]=tickCount;
     switch(k){
       case 'beam': if(tickCount-this.lastShot<6)return; this.lastShot=tickCount; this.tone('sine',1800,700,0.12,0.14); this.tone('sawtooth',900,500,0.1,0.05); break;
       case 'shot': if(tickCount-this.lastShot<4)return; this.lastShot=tickCount; this.tone('square',1500,420,0.05,0.12); break;
@@ -771,13 +807,13 @@ const SND={
   }
 };
 let wantTune=-1;
-function tune(t){ musicBack=null; wantTune=t; if(Music.ready)Music.play(t); }
+function tune(t){ musicBack=null; wantTune=t; if(Music.inited)Music.play(t); }
 const TUNES={title:11,hub:11,level:0,boss:7,planet:12,fail:2,quest:3};
 // a short piece that then hands back to another tune (used when a guardian appears)
 let musicBack=null;
 function jingle(t,frames,back){tune(t); musicBack={at:tickCount+frames,t:back};}
 // the long in-game track stops (and starts again from the top) when a planet ends
-function stopLongTrack(){Music.saved0=null;}
+function stopLongTrack(){Music.stopLong();}
 
 // ---------- world data ----------
 const PLANETS=[
@@ -1196,7 +1232,7 @@ ST.title={
     if(!SND.live&&G.musicOn!==false&&((this.t>>4)&1))txtO(TOUCH.on?'Tap the screen to turn on sound':'Press a key or click to turn on sound',W/2,158,7,6,'center');
   }
 };
-function toggleMusic(){G.musicOn=!(G.musicOn!==false); Music.on=G.musicOn; if(Music.sid&&!G.musicOn)Music.sid.reset(); save(); toast('Music '+(G.musicOn?'on':'off'),60);}
+function toggleMusic(){G.musicOn=!(G.musicOn!==false); Music.setOn(G.musicOn); save(); toast('Music '+(G.musicOn?'on':'off'),60);}
 
 // ---------- solar system hub ----------
 ST.hub={
