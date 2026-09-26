@@ -2183,7 +2183,7 @@ async function useDisk(bytes,remember){
     if(remember){try{localStorage.setItem(DISK_KEY,b64(d64));}catch(e){}}
     loadSave();
     loadEl.classList.add('gone'); SND.unlock(); go('title');
-  }catch(e){ showMsg(e.message||String(e),true); }
+  }catch(e){ loadEl.classList.remove('gone'); showMsg(e.message||String(e),true); }
 }
 fileEl.addEventListener('change',async()=>{const f=fileEl.files[0]; if(f)useDisk(new Uint8Array(await f.arrayBuffer()),true);});
 addEventListener('dragover',e=>{e.preventDefault();loadEl.classList.add('over');});
@@ -2191,8 +2191,10 @@ addEventListener('dragleave',()=>loadEl.classList.remove('over'));
 addEventListener('drop',async e=>{e.preventDefault();loadEl.classList.remove('over');const f=e.dataTransfer.files[0]; if(f&&!RAM)useDisk(new Uint8Array(await f.arrayBuffer()),true);});
 document.getElementById('forget').addEventListener('click',()=>{try{localStorage.removeItem(DISK_KEY);}catch(e){} showMsg('Saved disk removed from this browser.');});
 (function(){ let s=null; try{s=localStorage.getItem(DISK_KEY);}catch(e){}
-  if(s){ document.getElementById('resume').hidden=false;
-    document.getElementById('resume').addEventListener('click',()=>useDisk(unb64(s),false)); } })();
+  if(s){ // a disk was loaded before on this device: go straight in
+    document.getElementById('resume').hidden=false;
+    document.getElementById('resume').addEventListener('click',()=>useDisk(unb64(s),false));
+    loadEl.classList.add('gone'); useDisk(unb64(s),false); } })();
 // ----- pointer / touch -----
 const tbar=document.getElementById('touchbar');
 function enableTouch(){ if(TOUCH.on)return; TOUCH.on=true; document.body.classList.add('touch'); updateAuto(); }
