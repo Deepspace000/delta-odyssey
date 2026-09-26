@@ -833,15 +833,15 @@ function questsOnNode(pi,node){return WORLD[pi].quests.map((q,qi)=>({q,qi,s:qSta
 
 // ---------- shop ----------
 const SHOP=[
-  {id:'spread',name:'Spread shot',info:'Fires a fan of shots.',cost:()=>300,can:()=>!G.wep.spread,buy:()=>G.wep.spread=true},
-  {id:'laser',name:'Laser',info:'Fast beam that goes through enemies.',cost:()=>500,can:()=>!G.wep.laser,buy:()=>G.wep.laser=true},
-  {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>700,can:()=>!G.wep.homing,buy:()=>G.wep.homing=true},
-  {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>900,can:()=>!G.wep.wave,buy:()=>G.wep.wave=true},
-  {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Stronger shots.`,cost:()=>200*G.power,can:()=>G.power<5,buy:()=>G.power++},
-  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. Faster ship from the start.`,cost:()=>250*G.engine,can:()=>G.engine<4,buy:()=>G.engine++},
-  {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. Take more hits.`,cost:()=>300*G.shield,can:()=>G.shield<5,buy:()=>G.shield++},
-  {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>150*G.bombsMax,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
-  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>400,can:()=>G.ships<9,buy:()=>G.ships++},
+  {id:'spread',name:'Spread shot',info:'Fires a fan of shots.',cost:()=>600,can:()=>!G.wep.spread,buy:()=>G.wep.spread=true},
+  {id:'laser',name:'Laser',info:'Fast beam that goes through enemies.',cost:()=>1000,can:()=>!G.wep.laser,buy:()=>G.wep.laser=true},
+  {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>1400,can:()=>!G.wep.homing,buy:()=>G.wep.homing=true},
+  {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>1800,can:()=>!G.wep.wave,buy:()=>G.wep.wave=true},
+  {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Stronger shots.`,cost:()=>400*G.power,can:()=>G.power<5,buy:()=>G.power++},
+  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. Faster ship from the start.`,cost:()=>500*G.engine,can:()=>G.engine<4,buy:()=>G.engine++},
+  {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. Take more hits.`,cost:()=>600*G.shield,can:()=>G.shield<5,buy:()=>G.shield++},
+  {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>300*G.bombsMax,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
+  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>800,can:()=>G.ships<9,buy:()=>G.ships++},
 ];
 
 // ---------- toasts ----------
