@@ -924,18 +924,18 @@ function painter(cw=1,ch=1){
     line(x0,y0,x1,y1,w,m){P.put((x,y)=>segDist(x,y,x0,y0,x1,y1)<=w/2,m);},
     shade(){},
     // Delta look: dark body, lit rims, colour dithering inside, black detail lines
-    stylize(){
+    stylize(){ // clean Delta look: grey top/bottom rims, solid colour sides, full-row colour bands, black between
       const src=g.slice(), at=(i,j)=>(i<0||j<0||i>=GW||j>=GH)?0:src[j*GW+i];
       for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
         const k=j*GW+i, v=src[k]; if(!v)continue;
-        const up=!at(i,j-1), lf=!at(i-1,j), dn=!at(i,j+1), rt=!at(i+1,j);
+        const up=!at(i,j-1), dn=!at(i,j+1), lf=!at(i-1,j), rt=!at(i+1,j);
         if(v===3){g[k]=3;continue;}
-        if(up||lf){g[k]=(up?(i%3!==2):(j%2===0))?1:2;continue;}
-        if(dn||rt){g[k]=(j%2===0||rt&&dn)?2:3;continue;}
-        if(v===1){g[k]=(i+j)%3===0?1:((i+j)&1?2:3);continue;}
-        g[k]=(j%2===0&&(i%4)!==3)?2:3;
+        if(v===1){g[k]=(j%2===0)?1:3;continue;}
+        if(up){g[k]=1;continue;}
+        if(dn){g[k]=2;continue;}
+        if(lf||rt){g[k]=(j%2===0)?2:3;continue;}
+        g[k]=(j%2===0&&i%6!==5)?2:3;
       }
-      // remove stray single pixels
       for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){const k=j*GW+i; if(!g[k])continue;
         if(!((i>0&&g[k-1])||(i<GW-1&&g[k+1])||(j>0&&g[k-GW])||(j<GH-1&&g[k+GW])))g[k]=0;}
     },
@@ -965,10 +965,10 @@ function painter(cw=1,ch=1){
 const DESIGNS={
   rivet:(P,ph)=>{P.ell(12,10.5,10,8.5,2);P.ring(12,10.5,7.5,6.4,0.18,3);P.ell(12,10.5,4,3.4,3);P.ell(12,10.5,2.2,1.8,1);
     for(let k=0;k<4;k++){const a=ph*TAU/4+k*TAU/4;P.ell(12+Math.cos(a)*6.8,10.5+Math.sin(a)*5.8,2,1.6,1);}},
-  drill:(P,ph)=>{const tri=[[0,10.5],[17,2.5],[17,18.5]];P.poly(tri,2);P.put((x,y)=>inPoly(tri,x,y)&&(((x+y*0.9+ph*8)%8+8)%8)<3,1);
+  drill:(P,ph)=>{const tri=[[0,10.5],[17,2.5],[17,18.5]];P.poly(tri,2);P.put((x,y)=>inPoly(tri,x,y)&&(((x+y*0.9+ph*8)%8+8)%8)<2,1);
     P.rect(17,5,6,11,3);P.rect(18,7,4,7,1);if(ph<0.5)P.rect(22,9,2,3,1);},
   crab:(P,ph)=>{const w=Math.sin(ph*TAU)*1.5;
-    for(const s of[-1,1])for(let k=0;k<3;k++){const lx=12+s*(3+k*3);P.line(lx,13,lx+s*2,19+(k%2?w:-w),2,1);}
+    for(const s of[-1,1])for(let k=0;k<3;k++){const lx=12+s*(3+k*3);P.line(lx,13,lx+s*2,19+(k%2?w:-w),2,2);}
     P.ell(12,11,8.5,5.5,2);P.shade(12,11,8.5,5.5);P.line(5,11.5,19,11.5,2,3);
     P.line(9,7,8,3,2,1);P.line(15,7,16,3,2,1);P.ell(8,2.5,2,1.5,1);P.ell(16,2.5,2,1.5,1);
     P.ell(2.5,9+w,2.5,2.5,1);P.ell(21.5,9-w,2.5,2.5,1);},
@@ -984,7 +984,7 @@ const DESIGNS={
     P.ell(2.5,9.5+Math.sin(-ph*TAU)*5,1,0.8,3);},
   angler:(P,ph)=>{const f=Math.sin(ph*TAU)*3;P.poly([[17,10.5],[23.5,4+f],[23.5,17+f]],2);P.ell(11,11,8,6.5,2);P.shade(11,11,8,6.5);
     P.poly([[3,11.5],[9,12],[3,16.5]],3);P.rect(4,12,2,1.5,1);P.ell(8,8,1.4,1.2,3);P.line(9,5,6,1,2,1);P.ell(5,1.5,2.2,1.5,ph<0.5?1:2);},
-  flake:(P,ph)=>{for(let k=0;k<6;k++){const a=k*TAU/6+ph*TAU/6,cx=Math.cos(a),sy=Math.sin(a);P.line(12,10.5,12+cx*11,10.5+sy*9.5,5,2);
+  flake:(P,ph)=>{for(let k=0;k<6;k++){const a=k*TAU/6+ph*TAU/6,cx=Math.cos(a),sy=Math.sin(a);P.line(12,10.5,12+cx*11,10.5+sy*9.5,4.4,2);
     const mx=12+cx*6.5,my=10.5+sy*5.6;}
     P.ell(12,10.5,6,5,2);P.ell(12,10.5,2.5,2,3);P.ell(12,10.5,1.4,1.2,3);},
   icicle:(P,ph)=>{P.poly([[0,10.5],[15,4],[23.5,10.5],[15,17]],2);P.poly([[0,10.5],[16,5],[16,10.5]],1);P.line(16,5,16,16,2,3);P.rect(2+ph*14,8.5,2,1.5,3);},
@@ -1002,7 +1002,7 @@ const DESIGNS={
   orrery:(P,ph)=>{P.ring(12,10.5,10.5,7,0.3,2);const a=ph*TAU;P.ell(12,10.5,6,5.2,2);P.shade(12,10.5,5,4.4);
     P.ell(12+Math.cos(a)*9,10.5+Math.sin(a)*6,3,2.6,1);P.ell(12+Math.cos(a+Math.PI)*9,10.5+Math.sin(a+Math.PI)*6,3,2.6,2);},
   flare:(P,ph)=>{const j=Math.sin(ph*TAU*2)*2,j2=Math.cos(ph*TAU*2)*2;P.poly([[7,3.5],[23.5,6+j],[18,10.5],[23.5,15+j2],[7,17.5]],2);
-    P.ell(8,10.5,7,7,2);P.ell(7,10.5,4.5,4.5,1);P.line(12,10.5,21,10.5,2,3);P.put((x,y)=>x>12&&x<22&&Math.abs(y-10.5)<1+(((x+ph*10)%4)<2?1:0),1);},
+    P.ell(8,10.5,7,7,2);P.ell(7,10.5,3.5,3.5,1);P.line(12,10.5,21,10.5,2,3);P.put((x,y)=>x>12&&x<22&&Math.abs(y-10.5)<1+(((x+ph*10)%4)<2?1:0),1);},
   magma:(P,ph)=>{P.ell(12,10.5,10,8.5,2);P.shade(12,10.5,10,8.5);for(let k=0;k<5;k++){const a=k*TAU/5+ph*1.2;P.line(12,10.5,12+Math.cos(a)*8.5,10.5+Math.sin(a)*7.2,2,k%2?3:1);}P.ell(12,10.5,2.5,2,1);},
   phoenix:(P,ph)=>{const f=Math.cos(ph*TAU);P.ell(11,11,9,5.5,2);P.poly([[15,11],[23.5,7],[21,11],[23.5,15]],2);
     P.poly([[7,10.5],[16,10.5],[20,10.5-9*f],[11,10.5-6*f]],1);P.ell(11,11,6.5,3.2,2);P.shade(11,11,6.5,3.2);
@@ -1402,6 +1402,10 @@ function buildLevel(pi,node){
   const L={pi,node,type:node.type,d,r,t:0,sm:1+NG*0.3,ng:NG,sc,ts:r()*10,wx:0,yTop:SCENE[sc].top,yBot:SCENE[sc].bot,
     ev:[],en:[],eb:[],pb:[],pk:[],fx:[],so:[],forms:{},fid:0,boss:null,scroll:(1.3+d*0.12)*(1+NG*0.4),
     pool:planetPool(pi),earned:0,state:'play',endT:0,pause:false,shake:0,flash:0,bossDue:-1};
+  // one enemy type per level until the fourth stage; the fourth stage mixes up to three
+  const stage=node.id===0?0:node.id<=2?1:node.id<=6?2:node.id<=10?3:4;
+  if(stage===3){const r2=mulberry(pi*31+node.id*7); const p=L.pool.slice(); const mix=[]; while(mix.length<3&&p.length)mix.push(p.splice(Math.floor(r2()*p.length),1)[0]); L.wavePool=mix;}
+  else L.wavePool=[stage===4?L.pool[0]:L.pool[(node.id*2+pi)%L.pool.length]];
   const lenS={assault:48,asteroids:42,ambush:46,elite:34,cache:24,boss:6}[node.type]||40;
   L.len=lenS*60;
   const pats={assault:['line','sine','swoop','loop','dive','chase','sine'],asteroids:['line','sine','swoop'],ambush:['line','sine','dive','swoop','left','left','chase'],
@@ -1410,7 +1414,7 @@ function buildLevel(pi,node){
   while(t<L.len){
     const gap=Math.max(45,(165-d*11)*(0.7+r()*0.6)/(1+NG*0.3))*(node.type==='elite'?1.3:node.type==='cache'?1.6:1);
     if(node.type==='asteroids'&&r()<0.65) L.ev.push({t,kind:'rocks',n:2+Math.floor(r()*3)});
-    else L.ev.push({t,kind:'form',pat:pick(r,pats),e:pick(r,L.pool),n:4+Math.floor(r()*4)+(d>4?1:0),elite:node.type==='elite'});
+    else L.ev.push({t,kind:'form',pat:pick(r,pats),e:pick(r,L.wavePool),n:4+Math.floor(r()*4)+(d>4?1:0),elite:node.type==='elite'});
     if(node.type==='cache'&&r()<0.8)L.ev.push({t:t+30,kind:'cashline'});
     if(node.type!=='asteroids'&&r()<0.18)L.ev.push({t:t+50,kind:'rocks',n:1+Math.floor(r()*2)});
     t+=gap;
@@ -1625,7 +1629,7 @@ function updateBoss(L){
     if(kind==='aim'){const n=3+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.6+d*0.12+i*0.35);}
     if(kind==='ring'){const n=10+d*2; for(let i=0;i<n;i++){const a=i/n*TAU+B.t; L.eb.push({x:B.x,y:B.y,vx:Math.cos(a)*1.6*L.sm,vy:Math.sin(a)*1.6*L.sm,t:0});}}
     if(kind==='fan'){const n=5+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.9+d*0.1,(i-(n-1)/2)*0.16);}
-    if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.pool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
+    if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
     B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3);
   }
   if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?120:300)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
