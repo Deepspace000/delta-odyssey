@@ -104,7 +104,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.79</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.80</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -509,9 +509,9 @@ const WORLD=[
   ],
   boss:['The Heart of Ignis','A fortress forged inside the planet\'s core.'],
   quests:[
-   {kind:'killin',node:5,n:40,text:'Destroy 40 enemies in the Obsidian Field',reward:900},
-   {kind:'flawless',node:7,text:'Clear Solar Flare Run without losing a ship',reward:1100},
-   {kind:'via',node:10,text:'Hold Last Light, then defeat the Heart of Ignis',reward:1500},
+   {kind:'killin',node:5,n:40,text:'Destroy 40 enemies in the Obsidian Field',reward:450},
+   {kind:'flawless',node:7,text:'Clear Solar Flare Run without losing a ship',reward:550},
+   {kind:'via',node:10,text:'Hold Last Light, then defeat the Heart of Ignis',reward:750},
   ]},
  { // 1 Aurum
   tag:'A golden ringed giant, rich and fiercely guarded.',
@@ -530,9 +530,9 @@ const WORLD=[
   ],
   boss:['The Gilded Tyrant','A war barge plated in the wealth of a planet.'],
   quests:[
-   {kind:'flawless',node:3,text:'Slip through Cassini Gap without losing a ship',reward:700},
-   {kind:'rocksin',node:8,n:30,text:'Break 30 asteroids in the Goldstorm',reward:800},
-   {kind:'via',node:9,text:'Rob the Counting House, then defeat the Gilded Tyrant',reward:1200},
+   {kind:'flawless',node:3,text:'Slip through Cassini Gap without losing a ship',reward:350},
+   {kind:'rocksin',node:8,n:30,text:'Break 30 asteroids in the Goldstorm',reward:400},
+   {kind:'via',node:9,text:'Rob the Counting House, then defeat the Gilded Tyrant',reward:600},
   ]},
  { // 2 Verdant
   tag:'A jungle world whose spores drift up into orbit.',
@@ -551,9 +551,9 @@ const WORLD=[
   ],
   boss:['The Overgrowth','A planet-mind grown into a warship.'],
   quests:[
-   {kind:'route',node:3,text:'Search the Mossglass Ruins',reward:500},
-   {kind:'via',node:8,text:'Cut through the Bloom of Teeth, then defeat the Overgrowth',reward:900},
-   {kind:'killin',node:9,n:35,text:'Destroy 35 enemies in the Green Throat',reward:700},
+   {kind:'route',node:3,text:'Search the Mossglass Ruins',reward:250},
+   {kind:'via',node:8,text:'Cut through the Bloom of Teeth, then defeat the Overgrowth',reward:450},
+   {kind:'killin',node:9,n:35,text:'Destroy 35 enemies in the Green Throat',reward:350},
   ]},
  { // 3 Glacia
   tag:'A banded ice giant where storms freeze in mid-air.',
@@ -572,9 +572,9 @@ const WORLD=[
   ],
   boss:['The Frost Colossus','A frozen dreadnought, woken by your engines.'],
   quests:[
-   {kind:'flawless',node:4,text:'Shut down the Sleet Engine without losing a ship',reward:500},
-   {kind:'killin',node:7,n:30,text:'Destroy 30 enemies in the Silence of Hoarfrost',reward:550},
-   {kind:'rocksin',node:9,n:25,text:'Break 25 slabs of the Glacier Wreck',reward:600},
+   {kind:'flawless',node:4,text:'Shut down the Sleet Engine without losing a ship',reward:250},
+   {kind:'killin',node:7,n:30,text:'Destroy 30 enemies in the Silence of Hoarfrost',reward:280},
+   {kind:'rocksin',node:9,n:25,text:'Break 25 slabs of the Glacier Wreck',reward:300},
   ]},
  { // 4 Tethys
   tag:'An ocean moon of cracked ice and restless tides.',
@@ -593,9 +593,9 @@ const WORLD=[
   ],
   boss:['The Tide Sovereign','The thing beneath the ice rises to fight.'],
   quests:[
-   {kind:'killin',node:3,n:25,text:'Destroy 25 enemies in the Glass Tide',reward:350},
-   {kind:'via',node:8,text:'Cross the Abyssal Rim, then defeat the Tide Sovereign',reward:600},
-   {kind:'rocksin',node:9,n:20,text:'Break 20 ice reefs in Coldlight Reef',reward:400},
+   {kind:'killin',node:3,n:25,text:'Destroy 25 enemies in the Glass Tide',reward:180},
+   {kind:'via',node:8,text:'Cross the Abyssal Rim, then defeat the Tide Sovereign',reward:300},
+   {kind:'rocksin',node:9,n:20,text:'Break 20 ice reefs in Coldlight Reef',reward:200},
   ]},
  { // 5 Amethyst
   tag:'A violet gas giant wrapped in crystal moonlets.',
@@ -614,9 +614,9 @@ const WORLD=[
   ],
   boss:['The Prism Queen','A living crystal lattice that feeds on light.'],
   quests:[
-   {kind:'rocksin',node:6,n:20,text:'Break 20 crystals in the Shatterglass Field',reward:250},
-   {kind:'route',node:7,text:'Silence the Chorus of Shards',reward:300},
-   {kind:'flawless',node:9,text:'Cross the Eye of the Violet Storm without losing a ship',reward:400},
+   {kind:'rocksin',node:6,n:20,text:'Break 20 crystals in the Shatterglass Field',reward:120},
+   {kind:'route',node:7,text:'Silence the Chorus of Shards',reward:150},
+   {kind:'flawless',node:9,text:'Cross the Eye of the Violet Storm without losing a ship',reward:200},
   ]},
  { // 6 Rust (easiest)
   tag:'A rust-red mining world, stripped bare and abandoned.',
@@ -635,9 +635,9 @@ const WORLD=[
   ],
   boss:['The Iron Warden','An old mining drone, rebuilt as a fortress.'],
   quests:[
-   {kind:'route',node:3,text:'Survey the Tailings Belt',reward:150},
-   {kind:'killin',node:5,n:15,text:"Destroy 15 enemies in the Haulers' Graveyard",reward:200},
-   {kind:'via',node:10,text:'Break through Pit Boss Run, then defeat the Iron Warden',reward:300},
+   {kind:'route',node:3,text:'Survey the Tailings Belt',reward:80},
+   {kind:'killin',node:5,n:15,text:"Destroy 15 enemies in the Haulers' Graveyard",reward:100},
+   {kind:'via',node:10,text:'Break through Pit Boss Run, then defeat the Iron Warden',reward:150},
   ]},
 ];
 const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
@@ -645,7 +645,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='1.79';
+const VERSION='1.80';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -869,7 +869,7 @@ function genMap(pi){
 // ---------- saved game ----------
 const SAVE_KEY='deltaOdyssey.save.v2', DISK_KEY='deltaOdyssey.disk.v1';
 function newGame(){
-  return {credits:150,ships:3,power:1,engine:1,shield:1,bombsMax:1,
+  return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
     qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0};
@@ -907,15 +907,15 @@ function questsOnNode(pi,node){return WORLD[pi].quests.map((q,qi)=>({q,qi,s:qSta
 
 // ---------- shop ----------
 const SHOP=[
-  {id:'spread',name:'Spread shot',info:'Fires a fan of shots.',cost:()=>600,can:()=>!G.wep.spread,buy:()=>{G.wep.spread=true;G.weapon='spread';}},
-  {id:'laser',name:()=>laserLv()===0?'Laser':laserLv()<4?'Laser level '+(laserLv()+1):'Laser (max)',info:()=>laserLv()?`Level ${laserLv()} of 4. Longer, thicker, stronger beam.`:'A long blue beam that cuts through lines of enemies.',cost:()=>[1200,2000,3000,4500][laserLv()]||0,can:()=>laserLv()<4,buy:()=>{G.laserLv=laserLv()+1;G.wep.laser=true;G.weapon='laser';}},
-  {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>1400,can:()=>!G.wep.homing,buy:()=>{G.wep.homing=true;G.weapon='homing';}},
-  {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>1800,can:()=>!G.wep.wave,buy:()=>{G.wep.wave=true;G.weapon='wave';}},
-  {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Harder, faster shots.`,cost:()=>400*G.power,can:()=>G.power<5,buy:()=>G.power++},
-  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. Faster ship from the start.`,cost:()=>500*G.engine,can:()=>G.engine<4,buy:()=>G.engine++},
-  {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. Take more hits.`,cost:()=>600*G.shield,can:()=>G.shield<5,buy:()=>G.shield++},
-  {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>300*G.bombsMax,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
-  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>800,can:()=>G.ships<9,buy:()=>G.ships++},
+  {id:'spread',name:'Spread shot',info:'Fires a fan of shots.',cost:()=>2000,can:()=>!G.wep.spread,buy:()=>{G.wep.spread=true;G.weapon='spread';}},
+  {id:'laser',name:()=>laserLv()===0?'Laser':laserLv()<4?'Laser level '+(laserLv()+1):'Laser (max)',info:()=>laserLv()?`Level ${laserLv()} of 4. Longer, thicker, stronger beam.`:'A long blue beam that cuts through lines of enemies.',cost:()=>[2500,4000,6000,9000][laserLv()]||0,can:()=>laserLv()<4,buy:()=>{G.laserLv=laserLv()+1;G.wep.laser=true;G.weapon='laser';}},
+  {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>3000,can:()=>!G.wep.homing,buy:()=>{G.wep.homing=true;G.weapon='homing';}},
+  {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>4000,can:()=>!G.wep.wave,buy:()=>{G.wep.wave=true;G.weapon='wave';}},
+  {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Slightly harder, faster shots.`,cost:()=>[0,1200,2500,4000,6500][G.power]||0,can:()=>G.power<5,buy:()=>G.power++},
+  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. A little faster from the start.`,cost:()=>[0,1500,3000,5000][G.engine]||0,can:()=>G.engine<4,buy:()=>G.engine++},
+  {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. One more hit per level.`,cost:()=>[0,1500,3000,5000,8000][G.shield]||0,can:()=>G.shield<5,buy:()=>G.shield++},
+  {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>[0,1000,2500][G.bombsMax]||0,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
+  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>2500,can:()=>G.ships<9,buy:()=>G.ships++},
 ];
 
 // ---------- toasts ----------
@@ -1522,7 +1522,7 @@ function shootSolid(L,x,y,r,dmg){
 function hurtPiece(L,s,p,dmg){
   p.hp-=dmg; p.flash=4;
   if(p.hp<=0&&!p.gone){p.gone=true; s.pieces.splice(s.pieces.indexOf(p),1); boom(L,s.x+p.ox,s.y+p.oy,false);
-    const g=Math.max(1,Math.round(3*(0.25+L.d*0.08))); G.credits+=g; L.earned+=g; questEvent('rock',L.pi,L.node.id);
+    const g=1; G.credits+=g; L.earned+=g; questEvent('rock',L.pi,L.node.id);
     if(!s.pieces.length)s.dead=true;}
 }
 function solidHit(L,x,y,r){
@@ -1702,11 +1702,11 @@ function mainPattern(L,p,x,y,mul){
   const shot=(o)=>L.pb.push(Object.assign({x,y,vx:7,vy:0,dmg:1,kind:w,t:0,pierce:false,r:3,owner:p.id},o));
   let cool=8;
   switch(w){
-    case 'pulse': shot({vx:7.5,dmg:1+(pw-1)*0.35}); cool=Math.max(5,11-pw); break;
-    case 'spread': {const n=[3,3,5,5,7][pw-1]; for(let i=0;i<n;i++){const a=(i-(n-1)/2)*0.13; shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:0.8});} cool=13-pw; break;}
-    case 'laser': {const lv=laserLv(); shot({vx:11,dmg:[0,1.2,1.6,2.1,2.7][lv]*(1+(pw-1)*0.15),pierce:true,r:3,len:[0,48,64,80,100][lv],th:lv-1}); cool=[0,16,15,14,13][lv]-Math.floor(pw/3); break;}
-    case 'homing': {const n=pw>=4?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2+(pw-1)*0.3,r:4}); cool=24-pw*2; break;}
-    case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2,r:6,ph:s,y0:y}); cool=11-pw; break;
+    case 'pulse': shot({vx:7.5,dmg:1+(pw-1)*0.2}); cool=11-Math.ceil(pw/2); break;
+    case 'spread': {const n=[3,3,4,5,5][pw-1]; for(let i=0;i<n;i++){const a=(i-(n-1)/2)*0.13; shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:0.8});} cool=13-pw; break;}
+    case 'laser': {const lv=laserLv(); shot({vx:11,dmg:[0,1.2,1.6,2.1,2.7][lv]*(1+(pw-1)*0.1),pierce:true,r:3,len:[0,48,64,80,100][lv],th:lv-1}); cool=[0,16,15,14,13][lv]-Math.floor(pw/3); break;}
+    case 'homing': {const n=pw>=4?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2+(pw-1)*0.2,r:4}); cool=24-pw; break;}
+    case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2+(pw-1)*0.1,r:6,ph:s,y0:y}); cool=12-Math.ceil(pw/2); break;
   }
   if(mul!==1)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=mul;
   return cool;
@@ -1767,7 +1767,7 @@ function killEnemy(L,e){
   e.dead=true; boom(L,e.x,e.y,!!e.mini);
   if(e.secret)unlockPower(L,e.secret,e.x,e.y);
   if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
-  const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08)*(1+L.heat*0.15))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
+  const gain=Math.max(1,Math.round(e.val*(0.08+L.d*0.025)*(1+L.heat*0.05))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
   questEvent(e.rock?'rock':'kill',L.pi,L.node.id);
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
   if(e.cannon&&L.r()<0.2)podChance(L,e.x,e.y);
@@ -1848,7 +1848,7 @@ function updateBoss(L){
     if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
     B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3)/(1+L.heat*0.15);
   }
-  if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?120:300)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
+  if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?30:80)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
 }
 
 // ---------- drawing the scene ----------
@@ -1951,7 +1951,7 @@ ST.level={
       const c=CT[p.id], td=TOUCH.drag[p.id];
       if(!p.alive){ if(p.resp>0&&--p.resp===0){const spd=p.pw.speed; Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2}); p.pw.speed=spd;} continue; }
       // slow to start: Speed up pods (and the Engine upgrade) make the real difference
-      const sp=(0.57+G.engine*0.2+p.pw.speed*0.5)*(1+L.ng*0.12);
+      const sp=(0.65+G.engine*0.12+p.pw.speed*0.5)*(1+L.ng*0.12);
       // touch drags are capped to the same top speed, so speed-ups matter on touch too
       p.tdx=clamp((p.tdx||0)+td.dx*1.3,-40,40); p.tdy=clamp((p.tdy||0)+td.dy*1.3,-40,40);
       const cap=sp*1.8, mx=clamp(p.tdx,-cap,cap), my=clamp(p.tdy,-cap,cap); p.tdx-=mx; p.tdy-=my;
@@ -2032,7 +2032,7 @@ ST.level={
       const B=L.boss; if(B&&!B.dead&&Math.abs(p.x-B.x)<B.w/2+6&&Math.abs(p.y-B.y)<B.h/2+4)hurtPlayer(L,p);
       for(const k of L.pk){ if(!k.dead&&dist2(p.x,p.y,k.x,k.y)<200){k.dead=true;SND.sfx('pick');
         if(k.kind==='shield')p.shield=Math.min(G.shield+2,p.shield+1);
-        if(k.kind==='cash'){const g=15*L.d;G.credits+=g;L.earned+=g;}
+        if(k.kind==='cash'){const g=3*L.d;G.credits+=g;L.earned+=g;}
         if(k.kind==='bomb')p.bombs=Math.min(G.bombsMax,p.bombs+1);
         if(k.kind==='cap')p.bar=nextPower(p.bar); } }
     }
@@ -2054,7 +2054,7 @@ ST.level={
     }
   },
   finish(){
-    const L=LV, run=G.planets[L.pi].run, bonus={assault:50,asteroids:50,ambush:60,elite:120,cache:30,boss:200}[L.type]*L.d;
+    const L=LV, run=G.planets[L.pi].run, bonus={assault:15,asteroids:15,ambush:18,elite:35,cache:10,boss:60}[L.type]*L.d;
     G.credits+=bonus; L.bonus=bonus;
     const pd=G.planets[L.pi];
     G.stats.levels++;
