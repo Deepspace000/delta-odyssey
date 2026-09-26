@@ -775,7 +775,7 @@ const NODE={
   ambush:  {name:'Ambush',   icon:229,c:10,desc:'Enemies attack from every side.'},
   elite:   {name:'Elite patrol',icon:221,c:7, desc:'Tough enemies and a gunship. Big reward.'},
   cache:   {name:'Supply cache',icon:126,c:5, desc:'Light defence and lots of pickups.'},
-  boss:    {name:'Guardian', icon:110,c:2, desc:''},
+  boss:    {name:'Guardian', icon:163,c:2, desc:''},
 };
 function genMap(pi){
   const Wd=WORLD[pi], nodes=[], shape=[[0],[1,2],[3,4,5,6],[7,8,9,10],[11]];
@@ -912,24 +912,47 @@ const TAU=Math.PI*2;
 function inPoly(pts,x,y){let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const[xi,yi]=pts[i],[xj,yj]=pts[j];
   if(((yi>y)!==(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
 function segDist(x,y,x0,y0,x1,y1){const dx=x1-x0,dy=y1-y0,l=dx*dx+dy*dy;let t=l?((x-x0)*dx+(y-y0)*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(x-x0-t*dx,y-y0-t*dy);}
-function painter(){
-  const g=new Uint8Array(12*21);
-  const P={g,
-    put(test,m){for(let j=0;j<21;j++)for(let i=0;i<12;i++){if(test(i*2+1,j+0.5))g[j*12+i]=m;}},
+function painter(cw=1,ch=1){
+  const GW=12*cw, GH=21*ch, VW=24*cw, VH=21*ch, cx0=VW/2;
+  const g=new Uint8Array(GW*GH);
+  const P={g,GW,GH,sx:0.84,
+    put(test,m){for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){const x=cx0+(i*2+1-cx0)*P.sx; if(test(x,j+0.5))g[j*GW+i]=m;}},
     ell(cx,cy,rx,ry,m){P.put((x,y)=>((x-cx)/rx)**2+((y-cy)/ry)**2<=1,m);},
     ring(cx,cy,rx,ry,w,m){P.put((x,y)=>{const d=Math.hypot((x-cx)/rx,(y-cy)/ry);return d<=1&&d>=1-w;},m);},
     rect(x0,y0,w,h,m){P.put((x,y)=>x>=x0&&x<x0+w&&y>=y0&&y<y0+h,m);},
     poly(pts,m){P.put((x,y)=>inPoly(pts,x,y),m);},
     line(x0,y0,x1,y1,w,m){P.put((x,y)=>segDist(x,y,x0,y0,x1,y1)<=w/2,m);},
-    shade(cx,cy,rx,ry){for(let j=0;j<21;j++)for(let i=0;i<12;i++){const k=j*12+i; if(g[k]!==2)continue;
-      const dx=(i*2+1-cx)/rx, dy=(j+0.5-cy)/ry, s=dx*0.6+dy*0.8;
-      if(s<-0.62)g[k]=1; else if(s<-0.42&&((i+j)&1))g[k]=1; else if(s>0.8&&((i+j)&1))g[k]=3;}},
-    write(b){for(let j=0;j<21;j++)for(let k=0;k<3;k++){let v=0;for(let q=0;q<4;q++)v|=g[j*12+k*4+q]<<(6-2*q);SPR[b*64+j*3+k]=v;}}
+    shade(){},
+    // Delta look: dark body, lit rims, colour dithering inside, black detail lines
+    stylize(){
+      const src=g.slice(), at=(i,j)=>(i<0||j<0||i>=GW||j>=GH)?0:src[j*GW+i];
+      for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){
+        const k=j*GW+i, v=src[k]; if(!v)continue;
+        const up=!at(i,j-1), lf=!at(i-1,j), dn=!at(i,j+1), rt=!at(i+1,j);
+        if(v===3){g[k]=3;continue;}
+        if(up||lf){g[k]=(up?(i%3!==2):(j%2===0))?1:2;continue;}
+        if(dn||rt){g[k]=(j%2===0||rt&&dn)?2:3;continue;}
+        if(v===1){g[k]=(i+j)%3===0?1:((i+j)&1?2:3);continue;}
+        g[k]=(j%2===0&&(i%4)!==3)?2:3;
+      }
+      // remove stray single pixels
+      for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){const k=j*GW+i; if(!g[k])continue;
+        if(!((i>0&&g[k-1])||(i<GW-1&&g[k+1])||(j>0&&g[k-GW])||(j<GH-1&&g[k+GW])))g[k]=0;}
+    },
+    writeBlocks(first){ // returns list of {b,cx,cy} in sprite-grid order
+      const out=[]; let nb=first;
+      for(let r=0;r<ch;r++)for(let c=0;c<cw;c++){
+        let any=false;
+        for(let j=0;j<21;j++)for(let k=0;k<3;k++){let v=0;for(let q=0;q<4;q++){const px=g[(r*21+j)*GW+c*12+k*4+q];v|=px<<(6-2*q);if(px)any=true;}SPR[nb*64+j*3+k]=v;}
+        if(any)out.push({b:nb++,c,r}); }
+      return {cells:out,next:nb};
+    },
+    write(b){P.writeBlocks(b);}
   };
   return P;
 }
 const DESIGNS={
-  rivet:(P,ph)=>{P.ell(12,10.5,10,8.5,2);P.shade(12,10.5,10,8.5);P.ring(12,10.5,10,8.5,0.2,3);P.ell(12,10.5,4,3.4,3);P.ell(12,10.5,2.2,1.8,1);
+  rivet:(P,ph)=>{P.ell(12,10.5,10,8.5,2);P.ring(12,10.5,7.5,6.4,0.18,3);P.ell(12,10.5,4,3.4,3);P.ell(12,10.5,2.2,1.8,1);
     for(let k=0;k<4;k++){const a=ph*TAU/4+k*TAU/4;P.ell(12+Math.cos(a)*6.8,10.5+Math.sin(a)*5.8,2,1.6,1);}},
   drill:(P,ph)=>{const tri=[[0,10.5],[17,2.5],[17,18.5]];P.poly(tri,2);P.put((x,y)=>inPoly(tri,x,y)&&(((x+y*0.9+ph*8)%8+8)%8)<3,1);
     P.rect(17,5,6,11,3);P.rect(18,7,4,7,1);if(ph<0.5)P.rect(22,9,2,3,1);},
@@ -938,39 +961,39 @@ const DESIGNS={
     P.ell(12,11,8.5,5.5,2);P.shade(12,11,8.5,5.5);P.line(5,11.5,19,11.5,2,3);
     P.line(9,7,8,3,2,1);P.line(15,7,16,3,2,1);P.ell(8,2.5,2,1.5,1);P.ell(16,2.5,2,1.5,1);
     P.ell(2.5,9+w,2.5,2.5,1);P.ell(21.5,9-w,2.5,2.5,1);},
-  prism:(P,ph)=>{const w=Math.abs(Math.cos(ph*Math.PI))*9+2;P.poly([[12-w,10.5],[12,0.5],[12+w,10.5],[12,20.5]],2);
+  prism:(P,ph)=>{P.sx=0.64;const w=Math.abs(Math.cos(ph*Math.PI))*5+7;P.poly([[12-w,10.5],[12,0.5],[12+w,10.5],[12,20.5]],2);
     P.poly([[12-w,10.5],[12,0.5],[12,10.5]],1);P.line(12-w,10.5,12+w,10.5,2,3);},
-  shardling:(P,ph)=>{for(let k=0;k<3;k++){const a=ph*TAU/3+k*TAU/3,cx=12+Math.cos(a)*6.5,cy=10.5+Math.sin(a)*5.5;
-    P.poly([[cx-4,cy],[cx,cy-5],[cx+4,cy],[cx,cy+5]],2);P.poly([[cx-4,cy],[cx,cy-5],[cx,cy]],1);}P.ell(12,10.5,2,1.6,3);},
+  shardling:(P,ph)=>{P.sx=0.75;P.ell(12,10.5,5,4.5,2);for(let k=0;k<3;k++){const a=ph*TAU/3+k*TAU/3,cx=12+Math.cos(a)*6,cy=10.5+Math.sin(a)*5;
+    P.poly([[cx-6,cy],[cx,cy-6.5],[cx+6,cy],[cx,cy+6.5]],2);}P.ell(12,10.5,2,1.6,3);},
   geode:(P,ph)=>{const r=8.5+Math.sin(ph*TAU);const hex=s=>[0,1,2,3,4,5].map(k=>[12+Math.cos(k*TAU/6)*r*s*1.15,10.5+Math.sin(k*TAU/6)*r*s]);
     P.poly(hex(1),2);P.shade(12,10.5,r,r);P.poly(hex(0.55),3);P.poly([[12,10.5-r*0.45],[12+r*0.3,10.5],[12,10.5+r*0.45],[12-r*0.3,10.5]],1);},
-  jelly:(P,ph)=>{for(let k=0;k<4;k++){const x0=5+k*4.7;P.put((x,y)=>y>12&&Math.abs(x-(x0+Math.sin(y*0.7+ph*TAU+k)*1.6))<1.4,k%2?1:2);}
-    P.put((x,y)=>y<=12&&((x-12)/10)**2+((y-12)/10.5)**2<=1,2);P.shade(12,8,10,8);P.rect(2,11,20,1.6,1);P.ell(8,6,1.5,1.3,3);},
-  eel:(P,ph)=>{for(let s=6;s>=0;s--){const x=3+s*3.2,y=10.5+Math.sin(s*0.9-ph*TAU)*5,r=3.4-s*0.25;P.ell(x,y,r*1.3,r,s===0?1:2);if(s>0&&s%2===0)P.ell(x,y-r*0.4,r*0.6,r*0.35,1);}
+  jelly:(P,ph)=>{for(let k=0;k<3;k++){const x0=6+k*6;P.put((x,y)=>y>12&&Math.abs(x-(x0+Math.sin(y*0.6+ph*TAU+k)*1.4))<2.4,2);}
+    P.put((x,y)=>y<=12&&((x-12)/9.4)**2+((y-12)/8.8)**2<=1,2);P.shade(12,8,10,8);P.rect(2,11,20,1.6,1);P.ell(8,6,1.5,1.3,3);},
+  eel:(P,ph)=>{for(let s=6;s>=0;s--){const x=3+s*3.2,y=10.5+Math.sin(s*0.9-ph*TAU)*4,r=4.6-s*0.3;P.ell(x,y,r*1.3,r,2);if(s>0&&s%2===0)P.ell(x,y-r*0.4,r*0.6,r*0.35,1);}
     P.ell(2.5,9.5+Math.sin(-ph*TAU)*5,1,0.8,3);},
   angler:(P,ph)=>{const f=Math.sin(ph*TAU)*3;P.poly([[17,10.5],[23.5,4+f],[23.5,17+f]],2);P.ell(11,11,8,6.5,2);P.shade(11,11,8,6.5);
     P.poly([[3,11.5],[9,12],[3,16.5]],3);P.rect(4,12,2,1.5,1);P.ell(8,8,1.4,1.2,3);P.line(9,5,6,1,2,1);P.ell(5,1.5,2.2,1.5,ph<0.5?1:2);},
-  flake:(P,ph)=>{for(let k=0;k<6;k++){const a=k*TAU/6+ph*TAU/6,cx=Math.cos(a),sy=Math.sin(a);P.line(12,10.5,12+cx*11,10.5+sy*9.5,2,k%2?1:2);
-    const mx=12+cx*6.5,my=10.5+sy*5.6;P.line(mx,my,mx+Math.cos(a+1)*3.5,my+Math.sin(a+1)*3,2,1);P.line(mx,my,mx+Math.cos(a-1)*3.5,my+Math.sin(a-1)*3,2,1);}
-    P.ell(12,10.5,3,2.6,1);P.ell(12,10.5,1.4,1.2,3);},
-  icicle:(P,ph)=>{P.poly([[0,10.5],[16,5],[23.5,10.5],[16,16]],2);P.poly([[0,10.5],[16,5],[16,10.5]],1);P.line(16,5,16,16,2,3);P.rect(2+ph*14,8.5,2,1.5,3);},
-  frostorb:(P,ph)=>{const rr=1+Math.sin(ph*TAU)*0.12;P.ring(12,10.5,11*rr,9.5*rr,0.16,1);P.ell(12,10.5,6.5,5.5,2);P.shade(12,10.5,6.5,5.5);P.line(9,10.5,15,10.5,2,3);P.line(12,7.5,12,13.5,2,3);},
+  flake:(P,ph)=>{for(let k=0;k<6;k++){const a=k*TAU/6+ph*TAU/6,cx=Math.cos(a),sy=Math.sin(a);P.line(12,10.5,12+cx*11,10.5+sy*9.5,5,2);
+    const mx=12+cx*6.5,my=10.5+sy*5.6;}
+    P.ell(12,10.5,6,5,2);P.ell(12,10.5,2.5,2,3);P.ell(12,10.5,1.4,1.2,3);},
+  icicle:(P,ph)=>{P.poly([[0,10.5],[15,4],[23.5,10.5],[15,17]],2);P.poly([[0,10.5],[16,5],[16,10.5]],1);P.line(16,5,16,16,2,3);P.rect(2+ph*14,8.5,2,1.5,3);},
+  frostorb:(P,ph)=>{const p=Math.sin(ph*TAU);P.ell(12,10.5,10,8.5,2);P.ring(12,10.5,7,6,0.3,3);P.ell(12,10.5,3+p*0.6,2.6+p*0.5,1);P.line(1,10.5,23,10.5,2,3);},
   moth:(P,ph)=>{const f=Math.abs(Math.cos(ph*Math.PI));P.ell(14,10.5-4.5*f,7,4.5*f+1.2,2);P.ell(14,10.5+4.5*f,7,4.5*f+1.2,2);P.shade(14,10.5-4*f,7,4*f+1.2);
-    P.ell(13,10.5,9,2.4,1);P.ell(4,10.5,2.6,2.4,1);P.ell(3.5,10,1,0.8,3);P.ell(15,10.5-5*f,1.6,1.2*f+0.6,3);P.ell(15,10.5+5*f,1.6,1.2*f+0.6,3);},
-  spore:(P,ph)=>{const p=Math.sin(ph*TAU)*0.8;for(let k=0;k<8;k++){const a=k*TAU/8+0.2;P.line(12,10.5,12+Math.cos(a)*(11+p),10.5+Math.sin(a)*(9.5+p),2,1);}
-    P.ell(12,10.5,7+p,6+p,2);P.shade(12,10.5,7,6);P.ell(10,9,1.4,1.2,3);P.ell(14,12,1.4,1.2,3);P.ell(13,8,1,0.8,3);},
+    P.ell(13,10.5,9.5,3.2,2);P.ell(4,10.5,3,2.8,2);P.ell(3.5,10,1,0.8,3);},
+  spore:(P,ph)=>{const p=Math.sin(ph*TAU)*0.8;for(let k=0;k<6;k++){const a=k*TAU/6+0.2;P.line(12,10.5,12+Math.cos(a)*(11+p),10.5+Math.sin(a)*(9.5+p),3,2);}
+    P.ell(12,10.5,8.5+p,7.5+p,2);P.shade(12,10.5,7,6);P.ell(10,9,1.4,1.2,3);P.ell(14,12,1.4,1.2,3);P.ell(13,8,1,0.8,3);},
   beetle:(P,ph)=>{const w=Math.sin(ph*TAU)*1.3;for(let k=0;k<3;k++){const lx=9+k*4;P.line(lx,4,lx+(k%2?w:-w),0.5,2,1);P.line(lx,17,lx+(k%2?-w:w),20.5,2,1);}
     P.ell(13.5,10.5,9.5,7.5,2);P.shade(13.5,10.5,9.5,7.5);P.line(5,10.5,23,10.5,2,3);P.ell(3.5,10.5,2.8,3,1);P.ell(3,9.5,1,0.8,3);},
-  coin:(P,ph)=>{const w=Math.abs(Math.cos(ph*Math.PI))*8.5+1.5;P.ell(12,10.5,w,9.5,2);if(w>3.5){P.ring(12,10.5,w,9.5,0.22,1);P.shade(12,10.5,w,9.5);}
+  coin:(P,ph)=>{P.sx=0.56;const w=Math.abs(Math.cos(ph*Math.PI))*2.5+8;P.ell(12,10.5,w,7.4,2);if(w>3.5){P.ring(12,10.5,w,7.4,0.22,1);P.shade(12,10.5,w,9.5);}
     if(w>5)P.rect(11,7,2,7,3); else P.rect(11,1.5,2,18,1);},
-  sentinel:(P,ph)=>{P.poly([[0.5,10.5],[13,1.5],[23,3.5],[13,10.5],[23,17.5],[13,19.5]],2);P.poly([[0.5,10.5],[13,1.5],[23,3.5],[13,10.5]],1);
-    P.ell(9,10.5,2.8,2.2,ph<0.5?1:3);P.rect(17,9.5,6,2,3);},
-  orrery:(P,ph)=>{P.ring(12,10.5,10,6.5,0.14,3);const a=ph*TAU;P.ell(12,10.5,5,4.4,2);P.shade(12,10.5,5,4.4);
-    P.ell(12+Math.cos(a)*9.5,10.5+Math.sin(a)*6.2,2.4,2,1);P.ell(12+Math.cos(a+Math.PI)*9.5,10.5+Math.sin(a+Math.PI)*6.2,2,1.7,2);},
+  sentinel:(P,ph)=>{P.poly([[0.5,10.5],[13,1.5],[23,3.5],[13,10.5],[23,17.5],[13,19.5]],2);
+    P.ell(9,10.5,2.8,2.2,ph<0.5?1:3);},
+  orrery:(P,ph)=>{P.ring(12,10.5,10.5,7,0.3,2);const a=ph*TAU;P.ell(12,10.5,6,5.2,2);P.shade(12,10.5,5,4.4);
+    P.ell(12+Math.cos(a)*9,10.5+Math.sin(a)*6,3,2.6,1);P.ell(12+Math.cos(a+Math.PI)*9,10.5+Math.sin(a+Math.PI)*6,3,2.6,2);},
   flare:(P,ph)=>{const j=Math.sin(ph*TAU*2)*2,j2=Math.cos(ph*TAU*2)*2;P.poly([[7,3.5],[23.5,6+j],[18,10.5],[23.5,15+j2],[7,17.5]],2);
-    P.ell(8,10.5,7,7,2);P.ell(7,10.5,4.5,4.5,1);P.put((x,y)=>x>12&&x<22&&Math.abs(y-10.5)<1+(((x+ph*10)%4)<2?1:0),1);},
+    P.ell(8,10.5,7,7,2);P.ell(7,10.5,4.5,4.5,1);P.line(12,10.5,21,10.5,2,3);P.put((x,y)=>x>12&&x<22&&Math.abs(y-10.5)<1+(((x+ph*10)%4)<2?1:0),1);},
   magma:(P,ph)=>{P.ell(12,10.5,10,8.5,2);P.shade(12,10.5,10,8.5);for(let k=0;k<5;k++){const a=k*TAU/5+ph*1.2;P.line(12,10.5,12+Math.cos(a)*8.5,10.5+Math.sin(a)*7.2,2,k%2?3:1);}P.ell(12,10.5,2.5,2,1);},
-  phoenix:(P,ph)=>{const f=Math.cos(ph*TAU);P.poly([[15,11],[23.5,7],[21,11],[23.5,15]],2);
+  phoenix:(P,ph)=>{const f=Math.cos(ph*TAU);P.ell(11,11,9,5.5,2);P.poly([[15,11],[23.5,7],[21,11],[23.5,15]],2);
     P.poly([[7,10.5],[16,10.5],[20,10.5-9*f],[11,10.5-6*f]],1);P.ell(11,11,6.5,3.2,2);P.shade(11,11,6.5,3.2);
     P.ell(4.5,10,2.8,2.4,2);P.poly([[0.5,10.5],[3,9],[3,11.5]],1);P.ell(4,9.3,0.9,0.7,3);P.poly([[9,11.5],[16,11.5],[18,11.5+6*f],[12,11.5+4*f]],2);},
   cap:(P,ph)=>{P.ell(12,10.5,9.5,6.5,2);P.shade(12,10.5,9.5,6.5);P.rect(3,9.5,18,2,ph<0.5?1:3);P.ring(12,10.5,9.5,6.5,0.2,3);},
@@ -989,10 +1012,45 @@ const SEA_TYPE=['magma','coin','spore','icicle','eel','shardling','crab'];
 let CAPF=[],OPTF=[];
 function genSprites(){
   let nb=256;
-  const frames=(fn,n=6)=>{const out=[];for(let k=0;k<n;k++){const P=painter();fn(P,k/n);P.write(nb);out.push(nb++);}return out;};
+  const frames=(fn,n=6,sty=true)=>{const out=[];for(let k=0;k<n;k++){const P=painter();fn(P,k/n);if(sty)P.stylize();P.write(nb);out.push(nb++);}return out;};
   for(const id in NEWT){const [name,hp,val,an,c,beh]=NEWT[id]; ETYPES[id]={name,hp,val,an,c,beh,fr:frames(DESIGNS[id]),made:true};}
-  CAPF=frames(DESIGNS.cap,2); OPTF=frames(DESIGNS.opt,4);
+  CAPF=frames(DESIGNS.cap,2,false); OPTF=frames(DESIGNS.opt,4,false);
+  // one guardian hull per planet, painted as a single large picture and cut into sprites
+  BOSSART=[];
+  for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch); d.draw(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next;
+    BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,core:d.core,tur:d.tur});}
+  {const P=painter(2,2); GUNSHIP(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
+let BOSSART=[],GUNART=null;
+// Guardians: visual canvas is 24*cw x 21*ch, facing left. core/tur are offsets from the centre.
+const BOSSDESIGN=[
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[6,-28],[6,28]],draw:P=>{ // Heart of Ignis: molten sphere with flare arms
+   for(let k=0;k<6;k++){const a=k*TAU/6+0.3;P.poly([[48,31.5],[48+Math.cos(a-0.25)*30,31.5+Math.sin(a-0.25)*26],[48+Math.cos(a)*47,31.5+Math.sin(a)*31],[48+Math.cos(a+0.25)*30,31.5+Math.sin(a+0.25)*26]],2);}
+   P.ell(48,31.5,30,26,2);P.ring(48,31.5,30,26,0.12,1);for(let k=0;k<7;k++){const a=k*TAU/7;P.line(48,31.5,48+Math.cos(a)*26,31.5+Math.sin(a)*22,2,3);}P.ell(30,31.5,9,8,3);}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-20],[-40,20],[10,-28],[10,28]],draw:P=>{ // Gilded Tyrant: crowned chevron barge
+   P.poly([[2,31.5],[40,6],[94,10],[80,31.5],[94,53],[40,57]],2);P.poly([[40,6],[48,0.5],[56,6],[64,0.5],[72,8]],1);P.poly([[40,57],[48,62.5],[56,57],[64,62.5],[72,55]],1);
+   P.line(10,31.5,86,31.5,2,3);P.line(40,10,40,53,2,3);P.line(62,12,62,51,2,3);P.ring(30,31.5,11,10,0.2,1);P.rect(84,26,10,11,3);}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-16],[-40,16],[8,-27],[8,27]],draw:P=>{ // Overgrowth: armoured seed pod with tendrils
+   for(let k=0;k<5;k++){const y=8+k*12;P.line(70,31.5,95,y,3,2);P.ell(94,y,3,2.5,1);}
+   P.ell(46,31.5,38,27,2);P.line(8,31.5,84,31.5,2,3);for(let k=1;k<4;k++){P.ring(46,31.5,38*k/4,27*k/4,0.06,3);}P.ell(28,31.5,9,8,3);}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[6,-28],[6,28]],draw:P=>{ // Frost Colossus: hexagonal ice fortress with spikes
+   const hex=(r,ry)=>[0,1,2,3,4,5].map(k=>[48+Math.cos(k*TAU/6)*r,31.5+Math.sin(k*TAU/6)*ry]);
+   for(let k=0;k<6;k++){const a=k*TAU/6+TAU/12;P.poly([[48+Math.cos(a-0.2)*30,31.5+Math.sin(a-0.2)*24],[48+Math.cos(a)*48,31.5+Math.sin(a)*31],[48+Math.cos(a+0.2)*30,31.5+Math.sin(a+0.2)*24]],1);}
+   P.poly(hex(40,28),2);P.poly(hex(26,18),3);P.poly(hex(16,11),2);for(let k=0;k<6;k++){const a=k*TAU/6;P.line(48+Math.cos(a)*26,31.5+Math.sin(a)*18,48+Math.cos(a)*40,31.5+Math.sin(a)*28,2,3);}}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-38,-16],[-38,16],[14,-26],[14,26]],draw:P=>{ // Tide Sovereign: great sea beast
+   P.poly([[74,31.5],[95,6],[88,31.5],[95,57]],2);P.ell(44,33,38,24,2);P.poly([[6,36],[30,40],[8,52]],3);
+   for(let k=0;k<5;k++)P.rect(10+k*4,40,2,3,1);P.ell(30,22,4,3.5,1);P.ell(30,22,2,1.8,3);P.line(28,10,14,2,2,1);P.ell(12,2,3,2,1);
+   for(let k=0;k<4;k++)P.line(44+k*8,16,44+k*8,50,2,3);}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[6,-28],[6,28]],draw:P=>{ // Prism Queen: crystal lattice
+   P.poly([[4,31.5],[48,1],[92,31.5],[48,62]],2);P.poly([[4,31.5],[48,1],[48,31.5]],1);
+   P.poly([[26,31.5],[48,14],[70,31.5],[48,49]],3);P.poly([[36,31.5],[48,22],[60,31.5],[48,41]],2);
+   P.line(4,31.5,92,31.5,2,3);P.line(48,1,48,62,2,3);for(const s of[-1,1])P.poly([[70,31.5+s*6],[94,31.5+s*26],[82,31.5+s*8]],2);}},
+ {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[4,-28],[4,28]],draw:P=>{ // Iron Warden: fortified mining rig
+   P.poly([[2,31.5],[20,12],[20,51]],2);P.rect(20,10,58,44,2);P.rect(30,1,30,10,2);P.rect(30,53,30,10,2);P.rect(78,20,16,24,2);
+   for(let k=0;k<4;k++)P.line(28+k*14,12,28+k*14,52,2,3);P.line(20,22,78,22,2,3);P.line(20,42,78,42,2,3);
+   for(let k=0;k<5;k++){P.ell(26+k*12,17,1.6,1.4,1);P.ell(26+k*12,47,1.6,1.4,1);}P.put((x,y)=>inPoly([[2,31.5],[20,12],[20,51]],x,y)&&((x+y)%6)<2,1);P.rect(88,26,6,12,3);}},
+];
+function GUNSHIP(P){P.poly([[1,21],[22,4],[46,6],[36,21],[46,36],[22,38]],2);P.poly([[1,21],[22,4],[46,6],[36,21]],1);P.line(6,21,40,21,2,3);P.ring(18,21,7,6,0.3,1);P.rect(40,17,7,8,3);}
 
 // ================= states =================
 let STATE=null, tickCount=0;
@@ -1265,9 +1323,9 @@ const SCENE={
   x:{top:52,bot:PB-50,floor:[22,10],ceil:[20,10]},
 };
 const WATER=[[2,8,7],[9,8,7],[11,5,13],[6,14,3],[6,14,3],[6,4,10],[9,2,8]];
-const ROCKB=[64,65,66,69,70,71,73,74,75,76,77,78,80,81,82,84,86,88,90,93,95,99];
-const METALB=[102,103,104,105,106,107,108];
-const METEORB=[64,65,66,73,77,80];
+// whole, self-contained rocks from Delta's sprite set (the others are pieces or animation frames)
+const ROCKB=[67,68,73,76,77,84,85,88,90,91];
+const METEORB=[67,73,77,84,88];
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:0,alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
@@ -1373,7 +1431,7 @@ function spawnForm(L,ev){
 }
 function spawnRock(L){
   const r=L.r, P=PLANETS[L.pi];
-  L.en.push({rock:true,b:60+Math.floor(r()*42),c:pick(r,[P.shades[0],12,P.shades[1]]),x:W+16+r()*40,y:L.yTop+r()*(L.yBot-L.yTop),
+  L.en.push({rock:true,b:pick(r,ROCKB),c:pick(r,[P.shades[0],12,P.shades[1]]),x:W+16+r()*40,y:L.yTop+r()*(L.yBot-L.yTop),
     vx:-(0.6+r()*0.9+L.d*0.05)*L.sm,vy:(r()-0.5)*0.5,t:0,delay:0,hp:3+L.d*0.8,val:6,flash:0,rad:10,fc:1e9,pat:'rock'});
 }
 function spawnMeteor(L,delay){
@@ -1385,16 +1443,17 @@ function makeCannon(L,side,host,ox,oy){
     fc:60+L.r()*120,flash:0,rad:7,ang:side==='up'?-Math.PI/2:Math.PI/2,ex:true};
 }
 function spawnIsland(L,withCannon){
-  const r=L.r, n=3+Math.floor(r()*4), pieces=[];
-  for(let i=0;i<n;i++)pieces.push({b:pick(r,ROCKB),ox:(i-(n-1)/2)*16,oy:(r()-0.5)*6});
-  for(let i=1;i<n-1;i++)if(r()<0.6)pieces.push({b:pick(r,ROCKB),ox:(i-(n-1)/2)*16+(r()-0.5)*6,oy:r()<0.5?-12:12});
+  // a tight cluster of whole rocks, packed on a spiral so it reads as one mass
+  const r=L.r, n=5+Math.floor(r()*5), rx=14+n*2.6, ry=8+n*1.1, pieces=[];
+  for(let i=0;i<n;i++){const a=i*2.39996+r()*0.3, rr=Math.sqrt((i+0.5)/n); pieces.push({b:pick(r,ROCKB),ox:Math.round(Math.cos(a)*rr*rx),oy:Math.round(Math.sin(a)*rr*ry)});}
+  pieces.sort((p,q)=>p.oy-q.oy);
   const sh=PLANETS[L.pi].shades, y=L.yTop+22+r()*Math.max(1,L.yBot-L.yTop-44);
-  const s={island:true,x:W+n*10+24,y,pieces,w:n*16+16,c:L.pi===6?8:(sh[1]===1?sh[0]:sh[1]),mc1:L.pi===6?10:12};
+  const s={island:true,x:W+rx+30,y,pieces,w:rx*2+24,c:L.pi===6?8:(sh[1]===1?sh[0]:sh[1]),mc1:L.pi===6?10:12};
   L.so.push(s);
   if(withCannon){const up=r()<0.6, ys=pieces.map(p=>p.oy); L.en.push(makeCannon(L,up?'up':'down',s,(r()-0.5)*16,up?Math.min(...ys)-9:Math.max(...ys)+9));}
 }
 function spawnPillar(L,top){
-  const h=40+L.r()*28, w=L.pi===6?20:14;
+  const h=40+L.r()*28, w=14;
   if(top){const y0=ceilY(L,W-4); L.so.push({pillar:true,x:W+14,w,top,y0:y0-2,y1:y0+h});}
   else {const y1=floorY(L,W-4); L.so.push({pillar:true,x:W+14,w,top,y0:y1-h,y1:y1+2});}
 }
@@ -1408,18 +1467,13 @@ function boom(L,x,y,big){L.fx.push({x,y,t:0,big}); SND.sfx(big?'big':'boom'); if
 
 function makeBoss(L,mini){
   const r=L.r, P=PLANETS[L.pi], d=L.d;
-  const cols=mini?2:3+(r()<0.5?1:0), rows=mini?2:3;
-  const parts=[102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,247,248,250,251,252,254];
-  const pickT={}, cells=[];
-  for(let c=0;c<cols;c++)for(let rr=0;rr<rows;rr++){
-    const k=c+','+Math.min(rr,rows-1-rr); if(!(k in pickT))pickT[k]=pick(r,parts);
-    cells.push({b:pickT[k],ox:(c-(cols-1)/2)*24,oy:(rr-(rows-1)/2)*21});
-  }
+  const art=mini?GUNART:BOSSART[L.pi], cols=art.cw, rows=art.ch;
+  const cells=art.cells.map(q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}));
   const w=cols*24,h=rows*21;
   const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?50:110)+d*(mini?14:32))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
-    c:P.shades[1]===1?14:P.shades[1],vuln:false,flash:0,turrets:[]};
+    c:P.shades[1]===1?14:P.shades[1],vuln:false,flash:0,turrets:[],core:art.core};
   B.maxhp=B.hp;
-  const tpos=mini?[[-w/2,-h/4],[-w/2,h/4]]:[[-w/2,-h/3],[-w/2,h/3],[0,-h/2],[0,h/2]];
+  const tpos=art.tur;
   const pool=NEW_BY_PLANET[L.pi];
   for(const [ox,oy] of tpos){
     const tt=mini?'cone':pick(r,[pool[0],pool[1],'spinner']), T=ETYPES[tt];
@@ -1541,7 +1595,7 @@ function updateBoss(L){
   B.vuln=B.turrets.every(t=>t.dead);
   B.atk--; if(B.atk<=0&&B.x<W-20){
     const d=L.d, kind=pick(L.r,B.vuln?['aim','ring','fan','minions','ring']:['aim','fan','minions']);
-    const cx=B.x-B.w/4, cy=B.y;
+    const cx=B.x+B.core[0], cy=B.y+B.core[1];
     if(kind==='aim'){const n=3+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.6+d*0.12+i*0.35);}
     if(kind==='ring'){const n=10+d*2; for(let i=0;i<n;i++){const a=i/n*TAU+B.t; L.eb.push({x:B.x,y:B.y,vx:Math.cos(a)*1.6*L.sm,vy:Math.sin(a)*1.6*L.sm,t:0});}}
     if(kind==='fan'){const n=5+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.9+d*0.1,(i-(n-1)/2)*0.16);}
@@ -1568,24 +1622,29 @@ function drawBack(L){
 function drawTerrain(L){
   const c=SCENE[L.sc], sh=PLANETS[L.pi].shades, edge=sh[2]===1?sh[1]:sh[2], struct=L.sc==='x', rust=L.pi===6;
   if(c.ceil){const T=struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
-    for(let x=0;x<W;x+=2){const wx=L.wx+x, h=Math.round(ceilH(L,wx)), sx=((Math.floor(wx)%64)+64)%64; ctx.drawImage(T,sx,0,2,Math.min(96,h),x,13,2,h); rect(x,13+h-1,2,1,struct?15:edge);}}
+    for(let x=0;x<W;x+=2){const wx=L.wx+x, h=Math.round(ceilH(L,wx)), sx=(((Math.floor(wx)%64)+64)%64)&62; ctx.drawImage(T,sx,0,2,Math.min(96,h),x,13,2,h); rect(x,13+h-1,2,1,struct?15:edge);}}
   if(c.floor||c.water){const isW=!!c.water, T=isW?tex('water',WATER[L.pi]):struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
     for(let x=0;x<W;x+=2){const wx=L.wx+x; let h=floorH(L,wx); if(isW)h+=Math.sin(wx*0.07+L.t*0.08)*1.5+Math.sin(wx*0.19-L.t*0.05); h=Math.round(h);
-      const sx=((Math.floor(wx)%64)+64)%64; ctx.drawImage(T,sx,isW?((L.t>>2)%40):0,2,Math.min(56,h),x,PB-h,2,h);
+      const sx=(((Math.floor(wx)%64)+64)%64)&62; ctx.drawImage(T,sx,isW?((L.t>>2)%40):0,2,Math.min(56,h),x,PB-h,2,h);
       rect(x,PB-h,2,1,isW?WATER[L.pi][2]:struct?15:edge);}}
-  if(rust&&!c.water&&(c.floor||c.ceil)){ // Delta's own rock and metal pieces along Rust's land edges
-    const set=struct?METALB:ROCKB, step=struct?24:18, k0=Math.floor(L.wx/step)-1, k1=Math.floor((L.wx+W)/step)+1;
-    for(let k=k0;k<=k1;k++){const hs=Math.imul(k+5000,2654435761)>>>0; if(hs%5===0)continue; const x=k*step-L.wx+step/2;
-      if(c.floor)spr(set[hs%set.length],x,floorY(L,x)+4,struct?12:8,{mc1:struct?15:10});
-      if(c.ceil)spr(set[(hs>>>8)%set.length],x,ceilY(L,x)-4,struct?12:8,{mc1:struct?15:10});}
+  if(rust&&!c.water&&!struct&&(c.floor||c.ceil)){ // Delta's whole rocks set into Rust's ground, evenly spaced
+    const step=22, k0=Math.floor(L.wx/step)-1, k1=Math.floor((L.wx+W)/step)+1;
+    for(let k=k0;k<=k1;k++){const hs=Math.imul(k+5000,2654435761)>>>0; if(hs%3===0)continue; const x=k*step-L.wx+step/2;
+      if(c.floor)spr(ROCKB[hs%ROCKB.length],x,floorY(L,x)+6,8,{mc1:10});
+      if(c.ceil)spr(ROCKB[(hs>>>8)%ROCKB.length],x,ceilY(L,x)-6,8,{mc1:10});}
+  }
+  if(struct){ // clean trim: rivet line and marker lights along the metal
+    const off=((L.wx%16)+16)%16;
+    for(let x=-off;x<W;x+=16){ if(c.floor)rect(x+8,floorY(L,x+8)+3,1,1,11); if(c.ceil)rect(x+8,ceilY(L,x+8)-4,1,1,11); }
+    const o2=((L.wx%96)+96)%96, lit=(L.t>>4)&1;
+    for(let x=-o2;x<W;x+=96){ if(c.floor)rect(x+40,floorY(L,x+40)+6,2,1,lit?2:10); if(c.ceil)rect(x+40,ceilY(L,x+40)-7,2,1,lit?10:2); }
   }
 }
 function drawSolids(L){
   for(const s of L.so){
     if(s.island){for(const p of s.pieces)spr(p.b,s.x+p.ox,s.y+p.oy,s.c,{mc1:s.mc1});continue;}
     const h=s.y1-s.y0;
-    if(L.pi===6){for(let y=s.y0+10;y<s.y1+4;y+=21)spr(METALB[Math.abs(Math.round(y))%METALB.length],s.x,y,12,{mc1:15});}
-    else {ctx.drawImage(tex('metal',[11,12,15]),0,0,s.w,Math.min(96,h),s.x-s.w/2,s.y0,s.w,h); rect(s.x-s.w/2,s.y0,1,h,15); rect(s.x+s.w/2-1,s.y0,1,h,11);}
+    ctx.drawImage(tex('metal',[11,12,15]),0,0,s.w,Math.min(96,h),s.x-s.w/2,s.y0,s.w,h); rect(s.x-s.w/2,s.y0,1,h,15); rect(s.x+s.w/2-1,s.y0,1,h,11);
     rect(s.x-s.w/2-1,s.top?s.y1-2:s.y0,s.w+2,2,15);
   }
 }
@@ -1726,8 +1785,8 @@ ST.level={
       else spr(e.T.fr[((e.t/e.T.an)|0)%e.T.fr.length],e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2}); }
     const B=L.boss;
     if(B){ const dying=B.dead&&(B.deathT&4);
-      if(!dying)for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1,mc1:12});
-      if(!B.dead){const fr=ETYPES.ring.fr[((B.t/4)|0)%6]; spr(fr,B.x-B.w/4,B.y,B.vuln?((B.t/6|0)%2?2:7):11,{mc1:B.vuln?1:12});}
+      if(!dying)for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1});
+      if(!B.dead){const fr=ETYPES.ring.fr[((B.t/4)|0)%6]; spr(fr,B.x+B.core[0],B.y+B.core[1],B.vuln?((B.t/6|0)%2?2:7):11,{mc1:B.vuln?1:12});}
       for(const t of B.turrets)if(!t.dead)spr(t.T.fr[((t.t/t.T.an)|0)%t.T.fr.length],t.x,t.y,t.c,{flip:!t.T.made,flash:t.flash>2}); }
     for(const k of L.pk){ if(k.kind==='cap'){spr(CAPF[(k.t>>3)%CAPF.length],k.x,k.y,(k.t>>3)&1?2:10);continue;}
       const P=PICKS[k.kind]; if(k.t%30<26||k.x>40)spr(P.b,k.x,k.y,P.c);}
@@ -1758,10 +1817,11 @@ ST.level={
     rect(0,0,W,12,0); rect(0,12,W,1,11);
     const P=PLANETS[L.pi]; if(L.ng)txt('NG+'+L.ng,122,2,10,6); txt(P.name+': '+L.node.name,4,2,P.shades[2]===1?P.shades[1]:P.shades[2],6);
     if(L.intro>0){ if(L.intro>20||(L.intro&2)){txt(L.node.name,W/2,H/2-40,1,14,'center'); txt(L.node.desc,W/2,H/2-18,15,6,'center');}}
-    const prog=Math.min(1,L.t/L.len); rect(160,4,70,4,11); rect(160,4,70*prog,4,L.bossDue>=0&&prog>=1?2:5);
+    const prog=Math.min(1,L.t/L.len);
+    if(B&&!B.dead){rect(150,3,80,6,11); rect(150,3,80*Math.max(0,B.hp/B.maxhp),6,B.vuln?2:12); if(!B.vuln)txt('Turrets first',234,2,12,6);}
+    else {rect(160,4,70,4,11); rect(160,4,70*prog,4,5);}
     txt('Ships '+G.ships+'   Credits '+G.credits,W-4,2,7,6,'right');
     drawPowerBar(L);
-    if(B&&!B.dead){rect(W/2-60,16,120,3,11); rect(W/2-60,16,120*Math.max(0,B.hp/B.maxhp),3,B.vuln?2:12); txt(B.vuln?'':'Destroy the turrets first',W/2,21,12,5,'center');}
     if(L.pause){frame(W/2-90,H/2-30,180,60,7,0); txt('Paused',W/2,H/2-24,1,10,'center');
       frame(W/2-80,H/2,72,16,5,0); txt('Resume',W/2-44,H/2+4,13,7,'center'); hit(W/2-82,H/2-2,76,20,()=>{KP.Escape=true;});
       frame(W/2+8,H/2,72,16,10,0); txt('Back to map',W/2+44,H/2+5,10,6,'center'); hit(W/2+6,H/2-2,76,20,()=>{KP.KeyQ=true;});
