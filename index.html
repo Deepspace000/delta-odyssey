@@ -728,6 +728,9 @@ const SND={
       case 'deny': this.tone('square',140,110,0.14,0.25); break;
       case 'bomb': this.burst(1.2,5000,80,0.9); break;
       case 'laser': this.tone('sawtooth',180,1400,0.5,0.35); this.tone('square',90,60,0.6,0.25); break;
+      case 'alarm': for(let i=0;i<3;i++){this.tone('square',880,880,0.14,0.28,i*0.3); this.tone('square',660,660,0.14,0.28,i*0.3+0.15);} break;
+      case 'fanfare': [523,659,784,1047,784,1047].forEach((f,i)=>this.tone('square',f,f,0.12,0.3,i*0.11)); break;
+      case 'zap': this.tone('sawtooth',2400,300,0.12,0.25); this.burst(0.1,6000,2000,0.25); break;
       case 'coin': this.tone('square',990,990,0.05,0.2); this.tone('square',1320,1320,0.12,0.2,0.05); break;
     }
   }
@@ -793,7 +796,7 @@ function newGame(){
   return {credits:150,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
-    qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0}};
+    qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[]};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(G));}catch(e){}}
@@ -1202,7 +1205,7 @@ ST.hub={
     rect(0,0,W,13,0); rect(0,13,W,1,11);
     txt('Credits '+G.credits,4,3,7,7); txt('Ships '+G.ships,110,3,15,7);
     txt('Planets freed '+G.planets.filter(p=>p.freed>0).length+'/7',175,3,13,7); txt('Open '+G.unlocked+'/7',300,3,3,7);
-    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
+    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
     const h=this.hover;
     if(h){
       frame(8,H-38,W-16,30,h.station?3:PLANETS[h.pi].shades[1],0);
@@ -1314,6 +1317,7 @@ ST.map={
     ctx.globalAlpha=0.5; drawPlanet(this.pi,W-30,H+40,95,true); ctx.globalAlpha=1;
     txt(P.name,12,8,P.shades[2]===1?P.shades[1]:P.shades[2],12);
     txt(WORLD[this.pi].tag,12,26,15,6);
+    {const sp=SECRET[this.pi], got=(G.pwUnlocked||[]).includes(sp.pw); txt(got?'Secret power found: '+POWERS.find(q=>q.id===sp.pw).name:'A secret power-up is hidden on this planet',W-12,28,got?5:7,5,'right');}
     txt('Levels found '+pd.seen.length+'/11'+(pd.freed?'   Freed x'+pd.freed:''),W-12,8,13,6,'right');
     txt('Credits '+G.credits+'   Ships '+G.ships,W-12,18,7,6,'right');
     const run=pd.run, ch=this.choices();
@@ -1354,24 +1358,31 @@ const PB=H-24; // bottom of the playfield; the power-up strip sits below it
 const WEAPONS=['pulse','spread','laser','homing','wave'];
 const WNAME={pulse:'Pulse',spread:'Spread',laser:'Laser',homing:'Homing',wave:'Wave'};
 const PICKS={shield:{b:122,c:13},cash:{b:126,c:7},bomb:{b:125,c:10}};
-// the power strip, cheapest first; w = how much each level adds to the heat score
+// the power strip: top row is always available, bottom row is found one per planet
+// w = how much each level adds to the reinforcement score
 const POWERS=[
-  {id:'speed',name:'Speed up',icon:128,max:4,w:0.5},
-  {id:'twin',name:'Twin shot',icon:122,max:1,w:1},
-  {id:'rear',name:'Rear shot',icon:135,max:1,w:0.8},
-  {id:'spray',name:'Colour spray',icon:131,max:2,w:1.2},
-  {id:'bombs',name:'Up-down bombs',icon:141,max:1,w:1},
-  {id:'pierce',name:'Pierce',icon:132,max:1,w:1},
-  {id:'option',name:'Option drone',icon:136,max:2,w:1.5},
-  {id:'drones',name:'Drone squad',icon:138,max:1,w:2},
-  {id:'orbs',name:'Double orb',icon:137,max:1,w:1.5},
-  {id:'ghost',name:'Ghost ship',icon:124,max:1,w:2.5},
-  {id:'field',name:'Force field',icon:139,max:1,w:0.8},
-  {id:'mega',name:'Mega laser',icon:133,max:1,w:3},
-  {id:'nova',name:'Nova blast',icon:123,max:99,w:0},
+  {id:'speed',name:'Speed up',label:'SPEED',max:4,w:0.5},
+  {id:'twin',name:'Twin shot',label:'TWIN',max:1,w:1},
+  {id:'rear',name:'Rear shot',label:'REAR',max:1,w:0.8},
+  {id:'pierce',name:'Pierce',label:'PIERCE',max:1,w:1},
+  {id:'option',name:'Option drone',label:'OPTION',max:2,w:1.5},
+  {id:'field',name:'Force field',label:'FIELD',max:1,w:0.8},
+  {id:'nova',name:'Nova blast',label:'NOVA',max:99,w:0},
+  {id:'spray',name:'Colour spray',label:'SPRAY',max:2,w:1.2,lock:6},
+  {id:'bombs',name:'Up-down bombs',label:'BOMBS',max:1,w:1,lock:5},
+  {id:'drones',name:'Drone squad',label:'DRONES',max:1,w:2,lock:4},
+  {id:'orbs',name:'Double orb',label:'ORBS',max:1,w:1.5,lock:3},
+  {id:'arc',name:'Chain lightning',label:'ARC',max:1,w:2,lock:2},
+  {id:'ghost',name:'Ghost ship',label:'GHOST',max:1,w:2.5,lock:1},
+  {id:'mega',name:'Mega laser',label:'MEGA',max:1,w:3,lock:0},
 ];
+// where each secret power is hidden: a special mini-boss on one level of each planet
+const SECRET={6:{node:5,pw:'spray'},5:{node:8,pw:'bombs'},4:{node:4,pw:'drones'},3:{node:9,pw:'orbs'},2:{node:6,pw:'arc'},1:{node:7,pw:'ghost'},0:{node:10,pw:'mega'}};
+const powAvail=P=>!('lock' in P)||(G.pwUnlocked||[]).includes(P.id);
+function nextPower(i){for(let k=1;k<=POWERS.length;k++){const j=(i+k)%POWERS.length; if(powAvail(POWERS[j]))return j;} return 0;}
 const SPRAYC=[2,7,5,14,4,3,10,13,8];
-const HEATNAME=['','Heat rising','Swarm incoming','Bullet storm!'];
+const REINF=[3,5.5,8,11,14]; // score needed for reinforcement levels 1-5
+const REINF_SUB=['','More ships in every wave','Enemies fire spreads','Bullet storms begin','Heavy spreads, double waves','Full bullet storm'];
 // scenes per level: A | B1 B2 | C1-C4 | D1-D4 | guardian
 // s space, i floating islands, o planet in the background, f surface, c canyon, w ocean, x inside a structure
 const SCENES=['s|ii|oooo|wxcf|x','s|ii|oooo|iwxw|x','s|ii|oooo|ffcf|x','s|ii|oooo|fxfc|x','s|ii|oooo|wcww|x','s|ii|oooo|wcwc|x','s|ii|oooo|fcfc|x'].map(s=>s.replace(/\|/g,''));
@@ -1388,7 +1399,7 @@ const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:0,alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
-  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0};}
+  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0};}
 function ownedWeapons(){return WEAPONS.filter(w=>G.wep[w]);}
 
 // ---------- terrain ----------
@@ -1468,12 +1479,14 @@ function buildLevel(pi,node){
   if('sio'.includes(sc))for(let k=0;k<1+Math.floor(d/3);k++)L.ev.push({t:300+r()*Math.max(100,L.len-400),kind:'meteors',n:3+Math.floor(r()*3)});
   if(sc==='s')for(let k=0;k<3;k++)L.ev.push({t:200+r()*Math.max(100,L.len-300),kind:'rocks',n:1+Math.floor(r()*2)});
   if(node.type==='boss'||node.type==='elite')L.bossDue=L.len;
-  else if(r()<0.85)L.ev.push({t:Math.round(L.len*(0.45+r()*0.15)),kind:'mini'}); // a mini-boss in most stages
+  const sec=SECRET[pi]; const secret=sec&&sec.node===node.id&&!(G.pwUnlocked||[]).includes(sec.pw);
+  if(secret)L.ev.push({t:Math.round(L.len*0.5),kind:'mini',secret:sec.pw});
+  else if(node.type!=='boss'&&node.type!=='elite'&&r()<0.85)L.ev.push({t:Math.round(L.len*(0.45+r()*0.15)),kind:'mini'}); // a mini-boss in most stages
   L.ev.sort((a,b)=>a.t-b.t);
   L.pl=[makePlayer(0)]; if(G.coop)L.pl.push(makePlayer(1));
   const run=G.planets[pi].run; // powers carry along the route until the guardian
   if(run&&run.pw)for(const p of L.pl){const s=run.pw[p.id]; if(s){Object.assign(p.pw,s.pw); p.bar=s.bar; p.field=s.field||0;}}
-  L.podTick=0; L.heat=0; L.heat=heatOf(L);
+  L.podTick=0; L.arcs=[]; L.heat=0; L.heat=heatOf(L);
   for(const p of L.pl)p.y=(L.yTop+L.yBot)/2+(p.id?20:0);
   return L;
 }
@@ -1529,11 +1542,18 @@ function spawnJumpers(L,n){
   for(let i=0;i<n;i++)L.en.push({type:SEA_TYPE[L.pi],T,c:T.c,pat:'jump',t:0,delay:i*22,hp:T.hp*(1+L.d*0.1),val:T.val,fc:1e9,flash:0,rad:9,
     x:W*(0.45+r()*0.45)+i*14,y:wy+6,vx:-(0.5+L.scroll*0.3),vy:-(4.2+r()*1.3)*Math.sqrt(L.sm),ex:true,wy});
 }
-function spawnMini(L){
-  const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5)*(1+L.heat*0.3);
+function spawnMini(L,secret){
+  const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5)*(1+L.heat*0.2)*(secret?1.4:1);
   L.en.push({mini:true,pat:'miniboss',type:'mini',cells:MINIART[L.pi],c:P.shades[1]===1?P.shades[2]:P.shades[1],x:W+30,y:(L.yTop+L.yBot)/2,tx:W-70,
-    hp,maxhp:hp,rad:18,val:60,fc:100,t:0,delay:0,flash:0,ex:true,shot:0});
-  toast('A heavy ship moves in',90);
+    hp,maxhp:hp,rad:18,val:60,fc:100,t:0,delay:0,flash:0,ex:true,shot:0,secret});
+  toast(secret?'A strange ship appears...':'A heavy ship moves in',110);
+}
+function unlockPower(L,id,x,y){
+  if(!G.pwUnlocked)G.pwUnlocked=[]; if(G.pwUnlocked.includes(id))return;
+  G.pwUnlocked.push(id); save();
+  const P=POWERS.find(q=>q.id===id);
+  L.banner={t:0,dur:260,title:'UNLOCKED NEW POWER-UP!',sub:P.name,sub2:'It now appears on your power strip',col:7};
+  SND.sfx('fanfare'); for(let k=0;k<10;k++){const a=k/10*TAU; L.fx.push({x:x+Math.cos(a)*30,y:y+Math.sin(a)*22,t:-k*4,big:k%3===0});}
 }
 function spawnPick(L,x,y,kind){L.pk.push({x,y,kind,t:0,vx:-0.7});}
 function podChance(L,x,y){ if((++L.podTick)%2===0)spawnPick(L,x,y,'cap'); }
@@ -1546,7 +1566,7 @@ function makeBoss(L,mini){
   const w=cols*24,h=rows*21;
   const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?50:110)+d*(mini?14:32))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
     c:P.shades[1]===1?14:P.shades[1],vuln:false,flash:0,turrets:[],core:art.core};
-  B.hp*=1+L.heat*0.3; B.maxhp=B.hp;
+  B.hp*=1+L.heat*0.2; B.maxhp=B.hp;
   const tpos=art.tur;
   const pool=NEW_BY_PLANET[L.pi];
   for(const [ox,oy] of tpos){
@@ -1601,7 +1621,7 @@ function heatOf(L){
   let best=0;
   for(const p of L.pl){ if(!p.alive)continue; let s=(G.power-1)*0.5; for(const P of POWERS)s+=(p.pw[P.id]||0)*P.w; best=Math.max(best,s); }
   if(L.pl.length>1)best+=1;
-  return best<3?0:best<6?1:best<10?2:3;
+  let lv=0; for(const t of REINF)if(best>=t)lv++; return lv;
 }
 function nova(L){
   SND.sfx('bomb'); L.flash=18; L.eb.length=0;
@@ -1627,8 +1647,9 @@ function hurtPlayer(L,p){
 }
 function killEnemy(L,e){
   e.dead=true; boom(L,e.x,e.y,!!e.mini);
+  if(e.secret)unlockPower(L,e.secret,e.x,e.y);
   if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
-  const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08)*(1+L.heat*0.25))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
+  const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08)*(1+L.heat*0.15))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
   questEvent(e.rock?'rock':'kill',L.pi,L.node.id);
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
   if(e.cannon&&L.r()<0.2)podChance(L,e.x,e.y);
@@ -1690,7 +1711,7 @@ function updateEnemy(L,e){
   if(e.ex&&(e.x<-40||e.x>W+50||e.y<-50||e.y>H+40))e.dead=true;
   if(!e.rock&&e.pat!=='jump'&&(L.d>=2||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
     e.fc=Math.max(50,(e.turret?110:320-L.d*20))*(e.elite?0.55:1)*(0.7+L.r()*0.6)/(1+L.ng*0.4);
-    e.fc/=(1+L.heat*0.5); const n=L.heat>=3?5:L.heat>=2?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
+    e.fc/=(1+L.heat*0.35); const n=L.heat>=4?5:L.heat>=2?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
 }
 
 function updateBoss(L){
@@ -1707,7 +1728,7 @@ function updateBoss(L){
     if(kind==='ring'){const n=10+d*2; for(let i=0;i<n;i++){const a=i/n*TAU+B.t; L.eb.push({x:B.x,y:B.y,vx:Math.cos(a)*1.6*L.sm,vy:Math.sin(a)*1.6*L.sm,t:0});}}
     if(kind==='fan'){const n=5+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.9+d*0.1,(i-(n-1)/2)*0.16);}
     if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
-    B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3)/(1+L.heat*0.25);
+    B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3)/(1+L.heat*0.15);
   }
   if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?120:300)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
 }
@@ -1765,23 +1786,23 @@ function drawPowerBar(L){
   rect(0,PB,W,H-PB,0); rect(0,PB,W,1,11);
   const p0=L.pl[0], p1=L.pl[1];
   POWERS.forEach((P,i)=>{
-    const x=13+i*22, y=PB+12, c0=p0&&p0.bar===i, c1=p1&&p1.bar===i, maxed=p0&&P.id!=='nova'&&p0.pw[P.id]>=P.max;
-    ctx.globalAlpha=maxed&&!c0?0.35:1;
-    spr(P.icon,x,y,c0?((L.t>>3)&1?7:1):14,{mc1:c0?1:12}); ctx.globalAlpha=1;
-    if(c1)frame(x-12,y-11,24,23,13);
-    if(p0&&P.id!=='nova')for(let k=0;k<p0.pw[P.id];k++)rect(x-9+k*4,PB+2,3,2,13);
-    hit(x-11,PB,22,24,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
+    const row=i<7?0:1, col=i%7, x=2+col*42, y=PB+2+row*11, av=powAvail(P);
+    const c0=p0&&p0.bar===i, c1=p1&&p1.bar===i, lv=p0?p0.pw[P.id]:0, maxed=P.id!=='nova'&&lv>=P.max;
+    if(c0){rect(x,y,40,10,(L.t>>3)&1?7:8); txt(P.label,x+20,y+2,0,5,'center');}
+    else if(!av){frame(x,y,40,10,11,0); txt('? ? ?',x+20,y+2,11,5,'center');}
+    else {frame(x,y,40,10,maxed?11:6,0); txt(P.label,x+20,y+2,maxed?11:(lv?13:15),5,'center');}
+    if(c1)frame(x-1,y-1,42,12,13);
+    if(av&&P.id!=='nova')for(let k=0;k<lv;k++)rect(x+36-k*3,y+2,2,2,c0?0:13);
+    hit(x,y-1,40,12,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
   });
-  // name of the highlighted power, just above its panel
-  for(const p of L.pl){ if(p.bar<0)continue; const P=POWERS[p.bar], mx=P.id!=='nova'&&p.pw[P.id]>=P.max, lx=clamp(13+p.bar*22,40,W-60);
-    const label=P.name+(mx?' (max)':'')+(L.pl.length>1?(p.id?' P2':' P1'):'');
-    rect(lx-label.length*2.3-3,PB-10,label.length*4.6+6,9,0); txt(label,lx,PB-9,mx?11:(p.id?13:7),5,'center'); }
   const x=300, ws=ownedWeapons();
-  L.pl.forEach((p,i)=>{const y=PB+3+i*10;
+  L.pl.forEach((p,i)=>{const y=PB+2+i*7;
     txt((L.pl.length>1?(i?'2 ':'1 '):'')+WNAME[ws[Math.min(p.w,ws.length-1)]],x,y,p.c,5);
     for(let s=0;s<G.shield+2;s++)rect(x+40+s*4,y+2,3,3,s<p.shield?13:11);
-    txt('B'+p.bombs,W-4,y,10,5,'right');});
-  if(L.pl.length===1)txt(p0&&p0.bar>=0?(TOUCH.on?'Tap Power':'V to take'):'Pods charge it',x,PB+13,11,5);
+    txt('B'+p.bombs,W-3,y,10,5,'right');});
+  const cur=p0&&p0.bar>=0?POWERS[p0.bar]:null, mx=cur&&cur.id!=='nova'&&p0.pw[cur.id]>=cur.max;
+  txt(cur?cur.name+(mx?' (max)':''):'Collect pods',x,PB+(L.pl.length>1?16:11),cur?(mx?11:7):11,5);
+  if(cur&&!mx&&L.pl.length===1)txt(TOUCH.on?'Tap Power':'V to take',x,PB+18,11,4);
 }
 ST.level={
   enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; this.a=a; tune(a.node.type==='boss'?TUNES.boss:TUNES.level);},
@@ -1790,18 +1811,18 @@ ST.level={
     if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; SND.sfx('sel');}
     if(L.pause){ if(KP.KeyQ){go('map');} return; }
     if(KP.KeyM)toggleMusic();
-    if(L.t%30===0){const h=heatOf(L); if(h>L.heat)toast(HEATNAME[h],100); L.heat=h;}
-    if(L.heat>=3&&L.t%240===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; for(let i=0;i<12;i++){const a=i/12*TAU+L.t; L.eb.push({x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
+    if(L.t%30===0){const h=heatOf(L); if(h>L.heat){L.banner={t:0,dur:170,title:'WARNING',sub:'Reinforcements level '+h,sub2:REINF_SUB[h],col:2}; SND.sfx('alarm');} L.heat=h;}
+    if(L.heat>=3&&L.t%(L.heat>=5?180:300)===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; const nr=L.heat>=5?16:12; for(let i=0;i<nr;i++){const a=i/nr*TAU+L.t; L.eb.push({x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
     L.t++; L.wx+=L.scroll; if(L.shake)L.shake--; if(L.flash)L.flash--; if(L.intro>0)L.intro--;
     while(L.ev.length&&L.ev[0].t<=L.t){const ev=L.ev.shift();
-      if(ev.kind==='form'){const h=L.heat, e2=Object.assign({},ev,{n:ev.n+h*2}); spawnForm(L,e2); if(h&&L.r()<h*0.33)spawnForm(L,Object.assign({},e2,{pat:pick(L.r,['sine','line','swoop']),mirror:true}));}
+      if(ev.kind==='form'){const h=L.heat, e2=Object.assign({},ev,{n:ev.n+Math.round(h*1.5)}); spawnForm(L,e2); if(h&&L.r()<h*0.2)spawnForm(L,Object.assign({},e2,{pat:pick(L.r,['sine','line','swoop']),mirror:true}));}
       else if(ev.kind==='rocks'){for(let i=0;i<ev.n;i++)spawnRock(L);}
       else if(ev.kind==='meteors'){for(let i=0;i<ev.n;i++)spawnMeteor(L,i*18);}
       else if(ev.kind==='island')spawnIsland(L,ev.cannon);
       else if(ev.kind==='cannon')L.en.push(makeCannon(L,ev.side,null,0,0));
       else if(ev.kind==='pillar')spawnPillar(L,ev.top);
       else if(ev.kind==='jump')spawnJumpers(L,ev.n);
-      else if(ev.kind==='mini')spawnMini(L);
+      else if(ev.kind==='mini')spawnMini(L,ev.secret);
       else if(ev.kind==='cashline'){const y=L.yTop+14+L.r()*(L.yBot-L.yTop-28); const cap=(++L.podTick)%2===0; for(let i=0;i<4;i++)L.pk.push({x:W+10+i*22,y,kind:i===3&&cap?'cap':'cash',t:0,vx:-1});}}
     if(L.bossDue>=0&&L.t>=L.bossDue&&!L.boss&&L.state==='play'&&!L.bossMade){L.bossMade=true; makeBoss(L,L.type==='elite'); toast(L.type==='elite'?'Gunship incoming':L.node.name+' approaches',120);}
     for(const s of L.so){s.x-=L.scroll; if(s.x<-(s.w||30)-40)s.dead=true;} L.so=L.so.filter(s=>!s.dead);
@@ -1834,6 +1855,10 @@ ST.level={
       if(p.pw.bombs&&firing&&--p.bt<=0){p.bt=36; for(const s of[-1,1])L.pb.push({x:p.x,y:p.y+s*4,vx:1.1,vy:s*1.2,ay:s*0.12,kind:'lob',dmg:2.5,r:4,t:0,owner:p.id,blast:18});}
       if(p.pw.drones&&--p.dt<=0){p.dt=28; let best=null,bd=1e9; for(const e of L.en){if(e.dead||e.delay>0||e.x>W)continue; const d=dist2(p.x,p.y,e.x,e.y); if(d<bd){bd=d;best=e;}}
         if(best)for(let k=0;k<3;k++){const o=dronePos(L,p,k), a=Math.atan2(best.y-o.y,best.x-o.x); L.pb.push({x:o.x,y:o.y,vx:Math.cos(a)*5,vy:Math.sin(a)*5,dmg:0.8,kind:'dpel',r:2,t:0,owner:p.id});}}
+      if(p.pw.arc&&firing&&--p.at<=0){p.at=50; const pts=[{x:p.x+10,y:p.y}]; const hitList=[]; let cx=p.x,cy=p.y;
+        for(let k=0;k<4;k++){let best=null,bd=140*140; for(const e of L.en){if(e.dead||e.delay>0||hitList.includes(e))continue; const d=dist2(cx,cy,e.x,e.y); if(d<bd){bd=d;best=e;}}
+          if(!best)break; hitList.push(best); pts.push({x:best.x,y:best.y}); cx=best.x; cy=best.y;}
+        if(hitList.length){for(const e of hitList)damageEnemy(L,e,2); L.arcs.push({pts,t:0}); SND.sfx('zap');}}
       if(p.pw.mega){ if(p.beam>0){p.beam--; const B=L.boss;
           for(const e of L.en)if(!e.dead&&e.delay<=0&&e.x>p.x&&Math.abs(e.y-p.y)<5+e.rad*0.7)damageEnemy(L,e,0.4);
           if(B&&!B.dead&&B.vuln&&Math.abs(B.y-p.y)<B.h/2)B.hp-=0.4;
@@ -1874,10 +1899,10 @@ ST.level={
         if(k.kind==='shield')p.shield=Math.min(G.shield+2,p.shield+1);
         if(k.kind==='cash'){const g=15*L.d;G.credits+=g;L.earned+=g;}
         if(k.kind==='bomb')p.bombs=Math.min(G.bombsMax,p.bombs+1);
-        if(k.kind==='cap')p.bar=(p.bar+1)%POWERS.length; } }
+        if(k.kind==='cap')p.bar=nextPower(p.bar); } }
     }
     for(const k of L.pk){k.t++;k.x+=k.vx;k.y+=Math.sin(k.t*0.05)*0.3; if(k.x<-20)k.dead=true;}
-    for(const f of L.fx)f.t++;
+    for(const f of L.fx)f.t++; for(const a of L.arcs)a.t++; L.arcs=L.arcs.filter(a=>a.t<9); if(L.banner&&++L.banner.t>L.banner.dur)L.banner=null;
     L.pb=L.pb.filter(b=>!b.dead); L.eb=L.eb.filter(b=>!b.dead); L.en=L.en.filter(e=>!e.dead);
     L.pk=L.pk.filter(k=>!k.dead); L.fx=L.fx.filter(f=>f.t<(f.big?28:f.puff?10:f.spark?6:f.splash?24:21));
     if(L.state==='play'){
@@ -1910,7 +1935,7 @@ ST.level={
     drawBack(L); drawSolids(L); drawTerrain(L);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
-      if(e.mini){for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,e.c,{flash:e.flash>2}); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
+      if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
       else spr(e.T.fr[((e.t/e.T.an)|0)%e.T.fr.length],e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2}); }
@@ -1944,6 +1969,8 @@ ST.level={
         else if(p.mt>115&&((L.t>>1)&1)){rect(p.x+12,p.y-2,4,5,3); rect(p.x+13,p.y-1,2,3,1);} }
       if(p.field>0){ctx.strokeStyle=PAL[(L.t>>1)&1?3:1]; ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,15,12,0,0,TAU); ctx.stroke();}
     }
+    for(const a of L.arcs){ctx.strokeStyle=PAL[(a.t>>1)&1?1:14]; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a.pts[0].x+0.5,a.pts[0].y+0.5);
+      for(let i=1;i<a.pts.length;i++){const A=a.pts[i-1],B=a.pts[i]; for(let s=1;s<=4;s++){const f=s/4; ctx.lineTo(A.x+(B.x-A.x)*f+(s<4?(L.r()-0.5)*8:0)+0.5,A.y+(B.y-A.y)*f+(s<4?(L.r()-0.5)*8:0)+0.5);}} ctx.stroke();}
     for(const f of L.fx){
       if(f.puff){rect(f.x,f.y,1,1,f.t<5?7:12);continue;}
       if(f.spark){rect(f.x-1,f.y-1,3,3,1);continue;}
@@ -1955,13 +1982,16 @@ ST.level={
     // HUD
     rect(0,0,W,12,0); rect(0,12,W,1,11);
     const P=PLANETS[L.pi]; if(L.ng)txt('NG+'+L.ng,122,2,10,6); txt(P.name+': '+L.node.name,4,2,P.shades[2]===1?P.shades[1]:P.shades[2],6);
-    if(L.intro>0){ if(L.intro>20||(L.intro&2)){txt(L.node.name,W/2,H/2-40,1,14,'center'); txt(L.node.desc,W/2,H/2-18,15,6,'center');}}
+    if(L.intro>0&&!L.banner){ if(L.intro>20||(L.intro&2)){txt(L.node.name,W/2,H/2-40,1,14,'center'); txt(L.node.desc,W/2,H/2-18,15,6,'center');}}
     const prog=Math.min(1,L.t/L.len);
-    txt('Heat',318,2,11,5); for(let k=0;k<3;k++)rect(338+k*6,4,4,4,k<L.heat?[7,8,2][k]:11);
+    txt('Reinf',300,2,11,5); for(let k=0;k<5;k++)rect(324+k*5,4,4,4,k<L.heat?[7,7,8,8,2][k]:11);
     if(B&&!B.dead){rect(150,3,80,6,11); rect(150,3,80*Math.max(0,B.hp/B.maxhp),6,B.vuln?2:12); if(!B.vuln)txt('Turrets first',234,2,12,6);}
     else {rect(160,4,70,4,11); rect(160,4,70*prog,4,5);}
     txt('Ships '+G.ships,238,2,15,6); txt('Cr '+G.credits,W-4,2,7,6,'right');
     drawPowerBar(L);
+    if(L.banner){const b=L.banner, on=b.t<20||((b.t>>3)&1)||b.t>b.dur-40;
+      if(on){frame(W/2-120,58,240,50,b.col,0); frame(W/2-117,61,234,44,b.col===2?10:3,0);}
+      txt(b.title,W/2,66,b.col===2?10:7,10,'center'); txt(b.sub,W/2,82,1,8,'center'); if(b.sub2)txt(b.sub2,W/2,96,15,5,'center');}
     if(L.pause){frame(W/2-90,H/2-30,180,60,7,0); txt('Paused',W/2,H/2-24,1,10,'center');
       frame(W/2-80,H/2,72,16,5,0); txt('Resume',W/2-44,H/2+4,13,7,'center'); hit(W/2-82,H/2-2,76,20,()=>{KP.Escape=true;});
       frame(W/2+8,H/2,72,16,10,0); txt('Back to map',W/2+44,H/2+5,10,6,'center'); hit(W/2+6,H/2-2,76,20,()=>{KP.KeyQ=true;});
@@ -1978,7 +2008,7 @@ ST.level={
 // ================= ending, credits and New Game+ =================
 function startNGPlus(){
   const keep={credits:G.credits,power:G.power,engine:G.engine,shield:G.shield,bombsMax:G.bombsMax,wep:G.wep,coop:G.coop,
-    musicOn:G.musicOn,ngp:(G.ngp||0)+1,stats:G.stats,ships:Math.max(3,G.ships)};
+    musicOn:G.musicOn,ngp:(G.ngp||0)+1,stats:G.stats,pwUnlocked:G.pwUnlocked||[],ships:Math.max(3,G.ships)};
   G=Object.assign(newGame(),keep,{started:true}); save();
   go('hub',{intro:true}); toast('New Game+ '+G.ngp+'. Everything is faster and tougher.',240);
 }
