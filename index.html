@@ -626,7 +626,7 @@ function frame(x,y,w,h,border,fill=0){rect(x,y,w,h,fill);ctx.strokeStyle=col(bor
 let SPR=null, RAM=null;
 const sprCache=new Map();
 function sprImg(b,c,mc1=15,mc3=0,flip=false,flash=false){
-  const key=b+c*512+mc1*8192+mc3*131072+(flip?2097152:0)+(flash?4194304:0);
+  const key=b+c*1024+mc1*16384+mc3*262144+(flip?4194304:0)+(flash?8388608:0);
   let cnv=sprCache.get(key); if(cnv)return cnv;
   cnv=document.createElement('canvas'); cnv.width=24; cnv.height=21;
   const x=cnv.getContext('2d'), id=x.createImageData(24,21), d=id.data;
@@ -955,9 +955,9 @@ function painter(cw=1,ch=1){
         const up=!at(i,j-1), lf=!at(i-1,j), dn=!at(i,j+1), rt=!at(i+1,j);
         if(v===3){g[k]=3;continue;}
         const dx=(i*2+1)-12, dy=(j+0.5)-10.5, lit=dx*0.55+dy<-2;
-        if(up||lf||dn||rt){g[k]=lit?1:(((i+j)&1)?2:3);continue;}
+        if(up||lf||dn||rt){g[k]=lit?1:2;continue;}
         if(lit&&dx*0.55+dy<-5&&((i+j)&1)){g[k]=2;continue;}
-        g[k]=((i*7+j*13)%5===0||(i*3+j*5)%7===0)?2:3;}
+        g[k]=((i*7+j*13)%5===0||(i*3+j*5)%6===0)?2:3;}
     }
   };
   return P;
@@ -1028,7 +1028,7 @@ function genSprites(){
   CAPF=frames(DESIGNS.cap,2,false); OPTF=frames(DESIGNS.opt,4,false);
   // whole asteroids that tumble, kept a pixel clear of every sprite edge so none look cut off
   ROCKSETS=[];
-  for(let k=0;k<6;k++){const big=k<3, R=big?[10,8.8]:[7,6.2], s=[k*1.7+0.3,k*2.9+1.1,k*0.7+2.3];
+  for(let k=0;k<6;k++){const big=true, R=k<3?[10.6,9.4]:[10.4,9.25], s=[k*1.7+0.3+(k===4?0.9:0),k*2.9+1.1,k*0.7+2.3];
     const set=[];
     for(let f=0;f<6;f++){const P=painter(); P.sx=1; const rot=f/6*TAU/3;
       P.put((x,y)=>{const dx=(x-12)/R[0], dy=(y-10.5)/R[1], a=Math.atan2(dy,dx)-rot, d=Math.hypot(dx,dy);
@@ -1040,9 +1040,36 @@ function genSprites(){
   BOSSART=[];
   for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch); d.draw(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next;
     BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,core:d.core,tur:d.tur});}
+  MINIART=[];
+  for(let pi=0;pi<7;pi++){const P=painter(2,2); P.sx=0.92; MINIDESIGN[pi](P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next; MINIART.push(r.cells);}
   {const P=painter(2,2); GUNSHIP(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
-let BOSSART=[],GUNART=null,ROCKSETS=[];
+let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[];
+// mini-bosses: one larger ship per planet, 2x2 sprites (48x42), facing left
+const MINIDESIGN=[
+ P=>{ // Ignis: flame-finned fireship
+   P.poly([[20,21],[46,4],[40,21],[46,38]],2); P.ell(20,21,15,12,2); P.poly([[2,21],[12,15],[12,27]],2);
+   P.line(8,21,44,21,2,3); P.ring(20,21,15,12,0.16,1); P.ell(18,21,5,4.5,3); P.ell(18,21,2.5,2,1);},
+ P=>{ // Aurum: crowned disc ship
+   P.ell(24,21,21,13,2); P.poly([[10,9],[14,1],[18,8],[24,0.5],[30,8],[34,1],[38,9]],2); P.poly([[10,33],[14,41],[18,34],[24,41.5],[30,34],[34,41],[38,33]],2);
+   P.ring(24,21,21,13,0.14,3); P.line(4,21,44,21,2,3); P.line(8,15,40,15,2,1); P.line(8,27,40,27,2,1); P.ell(14,21,5,4.5,1); P.ell(14,21,2.5,2.2,3);},
+ P=>{ // Verdant: armoured beetle carrier
+   for(let k=0;k<3;k++){const lx=16+k*9; P.line(lx,8,lx+2,1,3,2); P.line(lx,34,lx+2,41,3,2);}
+   P.ell(26,21,20,15,2); P.line(8,21,46,21,2,3); P.ell(7,21,6,7,2); P.ell(5,19,1.6,1.4,1); P.ring(26,21,20,15,0.12,3); P.ring(26,21,14,10.5,0.2,1); P.line(26,8,26,34,2,3);},
+ P=>{ // Glacia: ice cruiser
+   const hex=(r,ry)=>[0,1,2,3,4,5].map(k=>[24+Math.cos(k*TAU/6)*r,21+Math.sin(k*TAU/6)*ry]);
+   P.poly(hex(22,17),2); P.ring(24,21,17,13,0.12,1); P.poly(hex(9,7),3); P.poly(hex(5,4),1);
+   for(let k=0;k<6;k++){const a=k*TAU/6; P.line(24+Math.cos(a)*12,21+Math.sin(a)*9,24+Math.cos(a)*21,21+Math.sin(a)*16,2,3);}},
+ P=>{ // Tethys: squid submarine
+   for(let k=0;k<4;k++){const y0=10+k*7.5; P.put((x,y)=>x>32&&Math.abs(y-(y0+Math.sin(x*0.4+k)*1.5))<1.8,2);}
+   P.ell(20,21,18,14,2); P.poly([[2,21],[10,14],[10,28]],2); P.ell(14,16,3.5,3,1); P.ell(14,16,1.6,1.4,3); P.line(6,24,30,24,2,3);},
+ P=>{ // Amethyst: twin-prism ship
+   for(const s of[-1,1])P.poly([[4,21+s*9],[22,21+s*20],[44,21+s*9],[22,21+s*1]],2);
+   P.poly([[2,21],[24,12],[46,21],[24,30]],2); P.line(6,8,40,8,2,1); P.line(6,34,40,34,2,1); P.line(2,21,46,21,2,3); P.poly([[14,21],[24,16],[34,21],[24,26]],3); P.ell(24,21,3,2.5,1);},
+ P=>{ // Rust: armoured hauler with drill
+   P.poly([[1,21],[14,10],[14,32]],2); P.rect(14,7,26,28,2); P.rect(40,13,7,16,2); P.rect(20,2,14,5,2); P.rect(20,35,14,5,2);
+   P.line(14,15,40,15,2,3); P.line(14,27,40,27,2,3); P.line(27,7,27,35,2,3); P.line(16,11,38,11,2,1); P.line(16,31,38,31,2,1); for(let k=0;k<4;k++){P.ell(18+k*6,19,1.2,1,1);P.ell(18+k*6,23,1.2,1,1);} P.ell(33,21,3,2.6,1);},
+];
 // Guardians: visual canvas is 24*cw x 21*ch, facing left. core/tur are offsets from the centre.
 const BOSSDESIGN=[
  {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[6,-28],[6,28]],draw:P=>{ // Heart of Ignis: molten sphere with flare arms
@@ -1431,6 +1458,7 @@ function buildLevel(pi,node){
   if('sio'.includes(sc))for(let k=0;k<1+Math.floor(d/3);k++)L.ev.push({t:300+r()*Math.max(100,L.len-400),kind:'meteors',n:3+Math.floor(r()*3)});
   if(sc==='s')for(let k=0;k<3;k++)L.ev.push({t:200+r()*Math.max(100,L.len-300),kind:'rocks',n:1+Math.floor(r()*2)});
   if(node.type==='boss'||node.type==='elite')L.bossDue=L.len;
+  else if(r()<0.85)L.ev.push({t:Math.round(L.len*(0.45+r()*0.15)),kind:'mini'}); // a mini-boss in most stages
   L.ev.sort((a,b)=>a.t-b.t);
   L.pl=[makePlayer(0)]; if(G.coop)L.pl.push(makePlayer(1));
   const run=G.planets[pi].run; // powers carry along the route until the guardian
@@ -1490,6 +1518,12 @@ function spawnJumpers(L,n){
   const r=L.r, T=ETYPES[SEA_TYPE[L.pi]], wy=PB-SCENE.w.water;
   for(let i=0;i<n;i++)L.en.push({type:SEA_TYPE[L.pi],T,c:T.c,pat:'jump',t:0,delay:i*22,hp:T.hp*(1+L.d*0.1),val:T.val,fc:1e9,flash:0,rad:9,
     x:W*(0.45+r()*0.45)+i*14,y:wy+6,vx:-(0.5+L.scroll*0.3),vy:-(4.2+r()*1.3)*Math.sqrt(L.sm),ex:true,wy});
+}
+function spawnMini(L){
+  const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5);
+  L.en.push({mini:true,pat:'miniboss',type:'mini',cells:MINIART[L.pi],c:P.shades[1]===1?P.shades[2]:P.shades[1],x:W+30,y:(L.yTop+L.yBot)/2,tx:W-70,
+    hp,maxhp:hp,rad:18,val:60,fc:100,t:0,delay:0,flash:0,ex:true,shot:0});
+  toast('A heavy ship moves in',90);
 }
 function spawnPick(L,x,y,kind){L.pk.push({x,y,kind,t:0,vx:-0.7});}
 function podChance(L,x,y){ if((++L.podTick)%2===0)spawnPick(L,x,y,'cap'); }
@@ -1559,7 +1593,8 @@ function hurtPlayer(L,p){
   }
 }
 function killEnemy(L,e){
-  e.dead=true; boom(L,e.x,e.y,false);
+  e.dead=true; boom(L,e.x,e.y,!!e.mini);
+  if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
   const gain=Math.max(1,Math.round(e.val*(0.25+L.d*0.08))); G.credits+=gain; L.earned+=gain; G.stats.kills++;
   questEvent(e.rock?'rock':'kill',L.pi,L.node.id);
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
@@ -1568,7 +1603,7 @@ function killEnemy(L,e){
   if(beh==='split'&&!e.child)for(const s of[-1,1])L.en.push(Object.assign({},e,{dead:false,child:true,fid:0,hp:1,pat:'dive',vx:-(1.8+L.d*0.1)*L.sm,vy:s*1.6,t:0,delay:0,flash:0,ex:true}));
   if(beh==='burst'&&L.d>=2)for(let i=0;i<6;i++){const a=i/6*TAU+L.t*0.1; L.eb.push({x:e.x,y:e.y,vx:Math.cos(a)*1.4*L.sm,vy:Math.sin(a)*1.4*L.sm,t:0});}
   if(beh==='cash')spawnPick(L,e.x,e.y,'cash');
-  if(!e.turret&&!e.fid&&L.r()<(e.elite?0.16:0.05))spawnPick(L,e.x,e.y,pick(L.r,['shield','cash','cash','bomb']));
+  if(!e.turret&&!e.fid&&!e.mini&&L.r()<(e.elite?0.16:0.05))spawnPick(L,e.x,e.y,pick(L.r,['shield','cash','cash','bomb']));
 }
 function damageEnemy(L,e,dmg){ e.hp-=dmg; e.flash=4; if(e.hp<=0&&!e.dead)killEnemy(L,e); }
 function useBomb(L,p){
@@ -1590,6 +1625,15 @@ function updateEnemy(L,e){
     case 'chase': {const a=Math.atan2(tgt.y-e.y,tgt.x-e.x); e.vx=e.vx*0.96+Math.cos(a)*0.08-0.02; e.vy=e.vy*0.96+Math.sin(a)*0.08; e.x+=e.vx; e.y=clamp(e.y+e.vy,L.yTop,L.yBot); if(e.t>600)e.vx-=0.1; break;}
     case 'rock': e.x+=e.vx; e.y+=e.vy; if(e.y<L.yTop||e.y>L.yBot)e.vy*=-1; break;
     case 'turret': e.x=e.boss.x+e.ox; e.y=e.boss.y+e.oy; break;
+    case 'miniboss': { // stays on screen until destroyed
+      if(e.x>e.tx){e.x-=1.2*L.sm; e.base=e.t;} else e.x=e.tx+Math.sin((e.t-e.base)*0.013)*48;
+      const mid=(L.yTop+L.yBot)/2, range=Math.max(0,(L.yBot-L.yTop)/2-24);
+      e.y=mid+Math.sin(e.t*0.021)*range;
+      e.fc--; if(e.fc<=0&&alive.length){ e.shot++;
+        if(e.shot%2)for(let i=0;i<3;i++)aimShot(L,e.x-20,e.y,1.5+L.d*0.12+i*0.3);
+        else {const n=5+Math.floor(L.d/3); for(let i=0;i<n;i++)aimShot(L,e.x-20,e.y,1.6+L.d*0.1,(i-(n-1)/2)*0.2);}
+        e.fc=Math.max(45,120-L.d*8)/(1+L.ng*0.3); }
+      return; }
     case 'meteor': e.x+=e.vx; e.y+=e.vy; if(terrainHit(L,e.x,e.y,4)||e.y>PB+10){e.dead=true; boom(L,e.x,e.y,false);} break;
     case 'jump': e.x+=e.vx; e.y+=e.vy; e.vy+=0.1;
       if(e.t===1)L.fx.push({x:e.x,y:e.wy,t:0,splash:true});
@@ -1721,6 +1765,7 @@ ST.level={
       else if(ev.kind==='cannon')L.en.push(makeCannon(L,ev.side,null,0,0));
       else if(ev.kind==='pillar')spawnPillar(L,ev.top);
       else if(ev.kind==='jump')spawnJumpers(L,ev.n);
+      else if(ev.kind==='mini')spawnMini(L);
       else if(ev.kind==='cashline'){const y=L.yTop+14+L.r()*(L.yBot-L.yTop-28); const cap=(++L.podTick)%2===0; for(let i=0;i<4;i++)L.pk.push({x:W+10+i*22,y,kind:i===3&&cap?'cap':'cash',t:0,vx:-1});}}
     if(L.bossDue>=0&&L.t>=L.bossDue&&!L.boss&&L.state==='play'&&!L.bossMade){L.bossMade=true; makeBoss(L,L.type==='elite'); toast(L.type==='elite'?'Gunship incoming':L.node.name+' approaches',120);}
     for(const s of L.so){s.x-=L.scroll; if(s.x<-(s.w||30)-40)s.dead=true;} L.so=L.so.filter(s=>!s.dead);
@@ -1814,6 +1859,7 @@ ST.level={
     drawBack(L); drawSolids(L); drawTerrain(L);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
+      if(e.mini){for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,e.c,{flash:e.flash>2}); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
       else spr(e.T.fr[((e.t/e.T.an)|0)%e.T.fr.length],e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2}); }
@@ -1843,7 +1889,7 @@ ST.level={
       if(f.puff){rect(f.x,f.y,1,1,f.t<5?7:12);continue;}
       if(f.spark){rect(f.x-1,f.y-1,3,3,1);continue;}
       if(f.splash){const wc=WATER[L.pi]; for(let k=0;k<6;k++){const dx=(k-2.5)*3, dy=-f.t*(1.8-Math.abs(k-2.5)*0.35)+f.t*f.t*0.07; rect(f.x+dx,f.y+dy,1,2,k%2?wc[2]:1);} continue;}
-      const fr=156+Math.min(6,(f.t/(f.big?4:3))|0); spr(fr,f.x,f.y,7,{mc1:f.big?1:10,mc3:2});
+      if(f.t<0)continue; const fr=156+Math.min(6,(f.t/(f.big?4:3))|0); spr(fr,f.x,f.y,7,{mc1:f.big?1:10,mc3:2});
     }
     ctx.restore();
     if(L.flash){ctx.globalAlpha=L.flash/20;rect(0,0,W,H,1);ctx.globalAlpha=1;}
@@ -2001,7 +2047,7 @@ async function useDisk(bytes,remember){
     showMsg('Unpacking Delta...');
     await new Promise(r=>setTimeout(r,20));
     const d64=await getD64(bytes);
-    RAM=unpackDelta(d64); SPR=new Uint8Array(512*64); SPR.set(RAM.subarray(0x4000,0x8000)); genSprites(); sprCache.clear();
+    RAM=unpackDelta(d64); SPR=new Uint8Array(1024*64); SPR.set(RAM.subarray(0x4000,0x8000)); genSprites(); sprCache.clear();
     if(remember){try{localStorage.setItem(DISK_KEY,b64(d64));}catch(e){}}
     loadSave();
     loadEl.classList.add('gone'); SND.unlock(); go('title');
