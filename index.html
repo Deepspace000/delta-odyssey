@@ -832,7 +832,7 @@ const SHOP=[
   {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>700,can:()=>!G.wep.homing,buy:()=>G.wep.homing=true},
   {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>900,can:()=>!G.wep.wave,buy:()=>G.wep.wave=true},
   {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Stronger shots.`,cost:()=>200*G.power,can:()=>G.power<5,buy:()=>G.power++},
-  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. Faster ship.`,cost:()=>250*G.engine,can:()=>G.engine<4,buy:()=>G.engine++},
+  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. Faster ship from the start.`,cost:()=>250*G.engine,can:()=>G.engine<4,buy:()=>G.engine++},
   {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. Take more hits.`,cost:()=>300*G.shield,can:()=>G.shield<5,buy:()=>G.shield++},
   {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>150*G.bombsMax,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
   {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>400,can:()=>G.ships<9,buy:()=>G.ships++},
@@ -1304,7 +1304,7 @@ const WEAPONS=['pulse','spread','laser','homing','wave'];
 const WNAME={pulse:'Pulse',spread:'Spread',laser:'Laser',homing:'Homing',wave:'Wave'};
 const PICKS={shield:{b:122,c:13},cash:{b:126,c:7},bomb:{b:125,c:10}};
 const POWERS=[
-  {id:'speed',name:'Speed up',icon:128,max:3},
+  {id:'speed',name:'Speed up',icon:128,max:4},
   {id:'twin',name:'Twin shot',icon:122,max:1},
   {id:'rear',name:'Rear shot',icon:135,max:1},
   {id:'pierce',name:'Pierce',icon:132,max:1},
@@ -1698,8 +1698,12 @@ ST.level={
     for(const p of L.pl){
       const c=CT[p.id], td=TOUCH.drag[p.id];
       if(!p.alive){ if(p.resp>0&&--p.resp===0){Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2});} continue; }
-      const sp=(1.7+G.engine*0.35)*(1+L.ng*0.12)*(1+p.pw.speed*0.18);
-      p.x=clamp(p.x+c.x*sp+td.dx*1.3,12,W-14); p.y=clamp(p.y+c.y*sp+td.dy*1.3,22,PB-10);
+      // slow to start: Speed up pods (and the Engine upgrade) make the real difference
+      const sp=(1.0+G.engine*0.22+p.pw.speed*0.38)*(1+L.ng*0.12);
+      // touch drags are capped to the same top speed, so speed-ups matter on touch too
+      p.tdx=clamp((p.tdx||0)+td.dx*1.3,-40,40); p.tdy=clamp((p.tdy||0)+td.dy*1.3,-40,40);
+      const cap=sp*1.8, mx=clamp(p.tdx,-cap,cap), my=clamp(p.tdy,-cap,cap); p.tdx-=mx; p.tdy-=my;
+      p.x=clamp(p.x+c.x*sp+mx,12,W-14); p.y=clamp(p.y+c.y*sp+my,22,PB-10);
       const sc=SCENE[L.sc];
       if((sc.floor||sc.water)&&p.y>floorY(L,p.x)-7){p.y=floorY(L,p.x)-7; hurtPlayer(L,p);}
       if(sc.ceil&&p.y<ceilY(L,p.x)+7){p.y=ceilY(L,p.x)+7; hurtPlayer(L,p);}
