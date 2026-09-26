@@ -1375,7 +1375,9 @@ const POWERS=[
   {id:'arc',name:'Chain lightning',label:'ARC',max:1,w:2,lock:2},
   {id:'ghost',name:'Ghost ship',label:'GHOST',max:1,w:2.5,lock:1},
   {id:'mega',name:'Mega laser',label:'MEGA',max:1,w:3,lock:0},
+  {id:'wing',name:'Second ship',label:'WING',max:1,w:3.5},
 ];
+const WING_HP=6;
 // where each secret power is hidden: a special mini-boss on one level of each planet
 const SECRET={6:{node:5,pw:'spray'},5:{node:8,pw:'bombs'},4:{node:4,pw:'drones'},3:{node:9,pw:'orbs'},2:{node:6,pw:'arc'},1:{node:7,pw:'ghost'},0:{node:10,pw:'mega'}};
 const powAvail=P=>!('lock' in P)||(G.pwUnlocked||[]).includes(P.id);
@@ -1399,7 +1401,7 @@ const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:0,alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
-  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0};}
+  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0,wx:40,wy:100,whp:0,winv:0,wcool:0};}
 function ownedWeapons(){return WEAPONS.filter(w=>G.wep[w]);}
 
 // ---------- terrain ----------
@@ -1412,6 +1414,21 @@ function floorH(L,wx){const c=SCENE[L.sc]; if(c.water)return c.water; return c.f
 function ceilH(L,wx){const c=SCENE[L.sc]; return c.ceil?terrH(L,wx,c.ceil,1):0;}
 const floorY=(L,x)=>PB-floorH(L,L.wx+x), ceilY=(L,x)=>13+ceilH(L,L.wx+x);
 function terrainHit(L,x,y,r){const c=SCENE[L.sc]; if((c.floor||c.water)&&y+r>floorY(L,x))return true; if(c.ceil&&y-r<ceilY(L,x))return true; return false;}
+// damage an island rock if (x,y) touches one; returns true if something solid was hit
+function shootSolid(L,x,y,r,dmg){
+  for(const s of L.so){
+    if(s.island){ if(Math.abs(x-s.x)>s.w/2+r+12)continue;
+      for(let i=0;i<s.pieces.length;i++){const p=s.pieces[i]; if(dist2(x,y,s.x+p.ox,s.y+p.oy)<(9+r)*(9+r)){ hurtPiece(L,s,p,dmg); return true; }} }
+    else if(Math.abs(x-s.x)<s.w/2+r&&y>s.y0-r&&y<s.y1+r)return true;
+  }
+  return false;
+}
+function hurtPiece(L,s,p,dmg){
+  p.hp-=dmg; p.flash=4;
+  if(p.hp<=0&&!p.gone){p.gone=true; s.pieces.splice(s.pieces.indexOf(p),1); boom(L,s.x+p.ox,s.y+p.oy,false);
+    const g=Math.max(1,Math.round(3*(0.25+L.d*0.08))); G.credits+=g; L.earned+=g; questEvent('rock',L.pi,L.node.id);
+    if(!s.pieces.length)s.dead=true;}
+}
 function solidHit(L,x,y,r){
   for(const s of L.so){
     if(s.island){ if(Math.abs(x-s.x)>s.w/2+r+12)continue; for(const p of s.pieces)if(dist2(x,y,s.x+p.ox,s.y+p.oy)<(9+r)*(9+r))return true; }
@@ -1485,7 +1502,7 @@ function buildLevel(pi,node){
   L.ev.sort((a,b)=>a.t-b.t);
   L.pl=[makePlayer(0)]; if(G.coop)L.pl.push(makePlayer(1));
   const run=G.planets[pi].run; // powers carry along the route until the guardian
-  if(run&&run.pw)for(const p of L.pl){const s=run.pw[p.id]; if(s){Object.assign(p.pw,s.pw); p.bar=s.bar; p.field=s.field||0;}}
+  if(run&&run.pw)for(const p of L.pl){const s=run.pw[p.id]; if(s){Object.assign(p.pw,s.pw); p.bar=s.bar; p.field=s.field||0; p.whp=p.pw.wing?(s.whp||WING_HP):0;}}
   L.podTick=0; L.arcs=[]; L.heat=0; L.heat=heatOf(L);
   for(const p of L.pl)p.y=(L.yTop+L.yBot)/2+(p.id?20:0);
   return L;
@@ -1502,7 +1519,7 @@ function spawnForm(L,ev){
   if(pat==='loop')y0=clamp(y0,L.yTop+R,L.yBot-R);
   const fid=++L.fid; L.forms[fid]={n:ev.n,k:0};
   for(let i=0;i<ev.n;i++){
-    const e={type:ev.e.t,T,c:ev.e.c,pat,t:0,delay:i*(pat==='dive'?10:14),hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*(ev.elite?2.2:1),elite:ev.elite,fid,
+    const e={type:ev.e.t,T,c:ev.e.c,pat,t:0,delay:i*(pat==='dive'?10:Math.max(14,Math.ceil(31/Math.abs(sp)))),hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*(ev.elite?2.2:1),elite:ev.elite,fid,
       val:Math.round(T.val*(ev.elite?2:1)),fc:120+r()*200,flash:0,flip:fromLeft,rad:9,
       x:fromLeft?-14:W+14,y:y0,y0,vx:fromLeft?sp:-sp,vy:0,amp,w,ph:i*0.55,cx,R,a:0,turnAt:W*(0.45+r()*0.2),ex:false};
     if(pat==='dive'){e.x=W*(0.55+r()*0.35)+i*6; e.y=top?-12:PB+12; e.vy=top?2.3:-2.3; e.vx=-sp*0.7;}
@@ -1525,7 +1542,7 @@ function makeCannon(L,side,host,ox,oy){
 function spawnIsland(L,withCannon){
   // a tight cluster of whole rocks, packed on a spiral so it reads as one mass
   const r=L.r, n=5+Math.floor(r()*5), rx=14+n*2.6, ry=8+n*1.1, pieces=[];
-  for(let i=0;i<n;i++){const a=i*2.39996+r()*0.3, rr=Math.sqrt((i+0.5)/n); pieces.push({b:rockFrame(r),ox:Math.round(Math.cos(a)*rr*rx),oy:Math.round(Math.sin(a)*rr*ry)});}
+  for(let i=0;i<n;i++){const a=i*2.39996+r()*0.3, rr=Math.sqrt((i+0.5)/n); pieces.push({b:rockFrame(r),ox:Math.round(Math.cos(a)*rr*rx),oy:Math.round(Math.sin(a)*rr*ry),hp:3+L.d*0.5,flash:0});}
   pieces.sort((p,q)=>p.oy-q.oy);
   const sh=PLANETS[L.pi].shades, y=L.yTop+22+r()*Math.max(1,L.yBot-L.yTop-44);
   const s={island:true,x:W+rx+30,y,pieces,w:rx*2+24,c:L.pi===6?8:(sh[1]===1?sh[0]:sh[1]),mc1:L.pi===6?10:12};
@@ -1612,6 +1629,7 @@ function fireWeapon(L,p){
 function blast(L,x,y,rad,dmg){
   L.fx.push({x,y,t:0,big:false}); SND.sfx('boom');
   for(const e of L.en) if(!e.dead&&e.delay<=0&&dist2(x,y,e.x,e.y)<(rad+e.rad)*(rad+e.rad))damageEnemy(L,e,dmg);
+  for(const s of L.so)if(s.island)for(const p of s.pieces.slice())if(dist2(x,y,s.x+p.ox,s.y+p.oy)<(rad+9)*(rad+9))hurtPiece(L,s,p,dmg);
   const B=L.boss; if(B&&!B.dead&&B.vuln&&Math.abs(x-B.x)<B.w/2+rad&&Math.abs(y-B.y)<B.h/2+rad){B.hp-=dmg;B.flash=3;}
 }
 function dronePos(L,p,k){const a=L.t*0.03+k*TAU/3; return {x:p.x-4+Math.cos(a)*26,y:p.y+Math.sin(a)*20};}
@@ -1632,7 +1650,7 @@ function activatePower(L,p){
   if(p.bar<0){SND.sfx('deny');return;}
   const P=POWERS[p.bar];
   if(P.id!=='nova'&&p.pw[P.id]>=P.max){SND.sfx('deny');toast(P.name+' is maxed. Collect another pod.',70);return;}
-  p.pw[P.id]++; if(P.id==='field')p.field=3; if(P.id==='nova')nova(L);
+  p.pw[P.id]++; if(P.id==='field')p.field=3; if(P.id==='wing'){p.whp=WING_HP; p.wx=p.x-20; p.wy=p.y+30;} if(P.id==='nova')nova(L);
   p.bar=-1; SND.sfx('ok'); toast(P.name+(P.id==='nova'?'!':' on'),60);
 }
 
@@ -1671,7 +1689,7 @@ function updateEnemy(L,e){
   e.t++; if(e.flash)e.flash--;
   const alive=L.pl.filter(p=>p.alive), tgt=alive[0]||{x:0,y:H/2};
   switch(e.pat){
-    case 'line': e.x+=e.vx; break;
+    case 'line': e.x+=e.vx; e.y=e.y0+Math.sin(e.t*0.055+e.ph)*5; break;
     case 'sine': e.x+=e.vx; e.y=e.y0+Math.sin(e.t*e.w+e.ph)*e.amp; break;
     case 'swoop': e.x+=e.vx; if(e.x<e.turnAt){e.vy+=clamp((tgt.y-e.y)*0.004,-0.12,0.12); e.vy*=0.97; e.y=clamp(e.y+e.vy,L.yTop,L.yBot); e.vx*=1.012;} break;
     case 'loop': if(!e.inLoop){e.x+=e.vx; if(e.x<=e.cx+e.R){e.inLoop=true;e.a=0;}} else if(e.a<Math.PI*2.4){e.a+=0.045; e.x=e.cx+Math.cos(e.a)*e.R; e.y=e.y0-Math.sin(e.a)*e.R;} else {e.x+=e.vx*1.4;} break;
@@ -1770,7 +1788,7 @@ function drawTerrain(L){
 }
 function drawSolids(L){
   for(const s of L.so){
-    if(s.island){for(const p of s.pieces)spr(p.b,s.x+p.ox,s.y+p.oy,s.c,{mc1:s.mc1});continue;}
+    if(s.island){for(const p of s.pieces){if(p.flash)p.flash--; spr(p.b,s.x+p.ox,s.y+p.oy,s.c,{mc1:s.mc1,flash:p.flash>1});}continue;}
     const h=s.y1-s.y0;
     ctx.drawImage(tex('metal',[11,12,15]),0,0,s.w,Math.min(96,h),s.x-s.w/2,s.y0,s.w,h); rect(s.x-s.w/2,s.y0,1,h,15); rect(s.x+s.w/2-1,s.y0,1,h,11);
     rect(s.x-s.w/2-1,s.top?s.y1-2:s.y0,s.w+2,2,15);
@@ -1786,14 +1804,14 @@ function drawPowerBar(L){
   rect(0,PB,W,H-PB,0); rect(0,PB,W,1,11);
   const p0=L.pl[0], p1=L.pl[1];
   POWERS.forEach((P,i)=>{
-    const row=i<7?0:1, col=i%7, x=2+col*42, y=PB+2+row*11, av=powAvail(P);
+    const row=i<7?0:1, col=i<7?i:i-7, x=2+col*37, y=PB+2+row*11, av=powAvail(P);
     const c0=p0&&p0.bar===i, c1=p1&&p1.bar===i, lv=p0?p0.pw[P.id]:0, maxed=P.id!=='nova'&&lv>=P.max;
-    if(c0){rect(x,y,40,10,(L.t>>3)&1?7:8); txt(P.label,x+20,y+2,0,5,'center');}
-    else if(!av){frame(x,y,40,10,11,0); txt('? ? ?',x+20,y+2,11,5,'center');}
-    else {frame(x,y,40,10,maxed?11:6,0); txt(P.label,x+20,y+2,maxed?11:(lv?13:15),5,'center');}
-    if(c1)frame(x-1,y-1,42,12,13);
-    if(av&&P.id!=='nova')for(let k=0;k<lv;k++)rect(x+36-k*3,y+2,2,2,c0?0:13);
-    hit(x,y-1,40,12,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
+    if(c0){rect(x,y,35,10,(L.t>>3)&1?7:8); txt(P.label,x+17,y+2,0,5,'center');}
+    else if(!av){frame(x,y,35,10,11,0); txt('? ? ?',x+17,y+2,11,5,'center');}
+    else {frame(x,y,35,10,maxed?11:6,0); txt(P.label,x+17,y+2,maxed?11:(lv?13:15),5,'center');}
+    if(c1)frame(x-1,y-1,37,12,13);
+    if(av&&P.id!=='nova')for(let k=0;k<lv;k++)rect(x+31-k*3,y+2,2,2,c0?0:13);
+    hit(x,y-1,35,12,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
   });
   const x=300, ws=ownedWeapons();
   L.pl.forEach((p,i)=>{const y=PB+2+i*7;
@@ -1805,7 +1823,7 @@ function drawPowerBar(L){
   if(cur&&!mx&&L.pl.length===1)txt(TOUCH.on?'Tap Power':'V to take',x,PB+18,11,4);
 }
 ST.level={
-  enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; this.a=a; tune(a.node.type==='boss'?TUNES.boss:TUNES.level);},
+  enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; {const p=LV.pl[0], c=POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label); if(c.length)toast('Powers carried in: '+c.join(' '),220);} this.a=a; tune(a.node.type==='boss'?TUNES.boss:TUNES.level);},
   update(){
     const L=LV; if(!L)return;
     if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; SND.sfx('sel');}
@@ -1859,10 +1877,23 @@ ST.level={
         for(let k=0;k<4;k++){let best=null,bd=140*140; for(const e of L.en){if(e.dead||e.delay>0||hitList.includes(e))continue; const d=dist2(cx,cy,e.x,e.y); if(d<bd){bd=d;best=e;}}
           if(!best)break; hitList.push(best); pts.push({x:best.x,y:best.y}); cx=best.x; cy=best.y;}
         if(hitList.length){for(const e of hitList)damageEnemy(L,e,2); L.arcs.push({pts,t:0}); SND.sfx('zap');}}
+      if(p.pw.wing&&p.whp>0){ // the second ship: follows, fires full power, can be shot down
+        const mid=(L.yTop+L.yBot)/2; let side=p.y>mid?-1:1; if(p.pw.ghost)side=-side;
+        p.wx+=(p.x-4-p.wx)*0.12; p.wy+=(clamp(p.y+side*30,L.yTop+4,L.yBot-4)-p.wy)*0.12;
+        const sc2=SCENE[L.sc]; if(sc2.floor||sc2.water)p.wy=Math.min(p.wy,floorY(L,p.wx)-9); if(sc2.ceil)p.wy=Math.max(p.wy,ceilY(L,p.wx)+9);
+        if(p.winv)p.winv--;
+        if(firing&&--p.wcool<=0){p.wcool=mainPattern(L,p,p.wx+10,p.wy,1); for(const a of[-0.3,0.3])L.pb.push({x:p.wx+8,y:p.wy,vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:1,kind:'pulse',t:0,r:3,owner:p.id});
+          if(L.t%3===0)L.pb.push({x:p.wx+8,y:p.wy,vx:2.5,vy:0,dmg:2.2,kind:'homing',t:0,r:4,owner:p.id});}
+        let hitW=false;
+        for(const b of L.eb)if(!b.dead&&dist2(p.wx,p.wy,b.x,b.y)<36){b.dead=true;hitW=true;}
+        for(const e of L.en)if(!e.dead&&e.delay<=0&&dist2(p.wx,p.wy,e.x,e.y)<(e.rad*0.8+6)**2){hitW=true; if(!e.turret&&!e.cannon&&!e.mini)damageEnemy(L,e,3);}
+        if(hitW&&!p.winv){p.whp--; p.winv=40; SND.sfx('hit'); if(p.whp<=0){p.pw.wing=0; boom(L,p.wx,p.wy,true); toast('Second ship lost',90);}}
+      }
       if(p.pw.mega){ if(p.beam>0){p.beam--; const B=L.boss;
           for(const e of L.en)if(!e.dead&&e.delay<=0&&e.x>p.x&&Math.abs(e.y-p.y)<5+e.rad*0.7)damageEnemy(L,e,0.4);
           if(B&&!B.dead&&B.vuln&&Math.abs(B.y-p.y)<B.h/2)B.hp-=0.4;
-          for(const b of L.eb)if(b.x>p.x&&Math.abs(b.y-p.y)<6)b.dead=true; }
+          for(const b of L.eb)if(b.x>p.x&&Math.abs(b.y-p.y)<6)b.dead=true;
+          for(const s of L.so)if(s.island)for(const q of s.pieces.slice())if(s.x+q.ox>p.x&&Math.abs(s.y+q.oy-p.y)<10)hurtPiece(L,s,q,0.4); }
         else if(++p.mt>=150&&firing){p.mt=0; p.beam=34; SND.sfx('laser');} }
     }
     // bullets
@@ -1876,7 +1907,8 @@ ST.level={
       if(b.ay)b.vy+=b.ay;
       b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25)*10*b.ph; else b.y+=b.vy;
       if(b.x>W+20||b.x<-20||b.y<-10||b.y>H+10||b.t>200)b.dead=true;
-      else if(terrainHit(L,b.x,b.y,1)||(L.so.length&&solidHit(L,b.x,b.y,2))){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
+      else if(terrainHit(L,b.x,b.y,1)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
+      else if(L.so.length&&shootSolid(L,b.x,b.y,2,b.blast?0:b.dmg)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
     }
     for(const b of L.eb){b.x+=b.vx;b.y+=b.vy;b.t++; if(b.x<-10||b.x>W+10||b.y<-10||b.y>H+10||terrainHit(L,b.x,b.y,0))b.dead=true;}
     for(const e of L.en)if(!e.dead)updateEnemy(L,e);
@@ -1924,7 +1956,7 @@ ST.level={
     const pd=G.planets[L.pi];
     G.stats.levels++;
     if(L.type==='boss'){pd.freed++; G.stats.guardians++; questEvent('guardian',L.pi,11,{path:run?run.done:[]}); pd.run=null;}
-    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); run.pw=L.pl.map(p=>p.alive?{pw:{...p.pw},bar:p.bar,field:p.field}:{pw:{speed:p.pw.speed},bar:-1,field:0});} if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
+    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); run.pw=L.pl.map(p=>p.alive?{pw:{...p.pw},bar:p.bar,field:p.field,whp:p.whp}:{pw:{speed:p.pw.speed},bar:-1,field:0});} if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
       questEvent('clear',L.pi,L.node.id,{flawless:!L.lost}); }
     save();
   },
@@ -1962,6 +1994,8 @@ ST.level={
       for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); spr(OPTF[(L.t>>2)%OPTF.length],o.x,o.y,(L.t>>3)&1?7:10,{mc1:1});}
       if(p.inv&&(p.inv>>2)%2)continue;
       spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
+      if(p.pw.wing&&p.whp>0&&!(p.winv&&(p.winv>>2)%2)){spr(ETYPES.fighter.fr[((L.t/5)|0)%6],p.wx,p.wy,7,{flip:true,mc1:1});
+        for(let k=0;k<WING_HP;k++)rect(p.wx-11+k*4,p.wy-14,3,2,k<p.whp?13:11);}
       if(p.pw.ghost){ctx.globalAlpha=0.45; spr(shipFrame(L.t+4),p.gx,p.gy,3); ctx.globalAlpha=1;}
       if(p.pw.drones)for(let k=0;k<3;k++){const o=dronePos(L,p,k); rect(o.x-2,o.y-1,5,3,13); rect(o.x-1,o.y-2,3,5,13); rect(o.x,o.y,1,1,(L.t>>3)&1?1:5);}
       if(p.pw.orbs)for(let k=0;k<2;k++){const o=orbPos(p,k); rect(o.x-3,o.y-2,6,4,7); rect(o.x-2,o.y-3,4,6,7); rect(o.x-1,o.y-1,2,2,(L.t>>2)&1?1:8);}
