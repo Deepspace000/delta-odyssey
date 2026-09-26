@@ -947,7 +947,18 @@ function painter(cw=1,ch=1){
         if(any)out.push({b:nb++,c,r}); }
       return {cells:out,next:nb};
     },
-    write(b){P.writeBlocks(b);}
+    write(b){P.writeBlocks(b);},
+    // rock look: lit upper-left rim, speckled colour, dark crater detail
+    stylizeRock(){
+      const src=g.slice(), at=(i,j)=>(i<0||j<0||i>=GW||j>=GH)?0:src[j*GW+i];
+      for(let j=0;j<GH;j++)for(let i=0;i<GW;i++){const k=j*GW+i, v=src[k]; if(!v)continue;
+        const up=!at(i,j-1), lf=!at(i-1,j), dn=!at(i,j+1), rt=!at(i+1,j);
+        if(v===3){g[k]=3;continue;}
+        const dx=(i*2+1)-12, dy=(j+0.5)-10.5, lit=dx*0.55+dy<-2;
+        if(up||lf||dn||rt){g[k]=lit?1:(((i+j)&1)?2:3);continue;}
+        if(lit&&dx*0.55+dy<-5&&((i+j)&1)){g[k]=2;continue;}
+        g[k]=((i*7+j*13)%5===0||(i*3+j*5)%7===0)?2:3;}
+    }
   };
   return P;
 }
@@ -1015,13 +1026,23 @@ function genSprites(){
   const frames=(fn,n=6,sty=true)=>{const out=[];for(let k=0;k<n;k++){const P=painter();fn(P,k/n);if(sty)P.stylize();P.write(nb);out.push(nb++);}return out;};
   for(const id in NEWT){const [name,hp,val,an,c,beh]=NEWT[id]; ETYPES[id]={name,hp,val,an,c,beh,fr:frames(DESIGNS[id]),made:true};}
   CAPF=frames(DESIGNS.cap,2,false); OPTF=frames(DESIGNS.opt,4,false);
+  // whole asteroids that tumble, kept a pixel clear of every sprite edge so none look cut off
+  ROCKSETS=[];
+  for(let k=0;k<6;k++){const big=k<3, R=big?[10,8.8]:[7,6.2], s=[k*1.7+0.3,k*2.9+1.1,k*0.7+2.3];
+    const set=[];
+    for(let f=0;f<6;f++){const P=painter(); P.sx=1; const rot=f/6*TAU/3;
+      P.put((x,y)=>{const dx=(x-12)/R[0], dy=(y-10.5)/R[1], a=Math.atan2(dy,dx)-rot, d=Math.hypot(dx,dy);
+        return d<=0.86+0.07*Math.sin(3*a+s[0])+0.04*Math.sin(5*a+s[1])+0.025*Math.sin(7*a+s[2]);},2);
+      for(let c=0;c<3;c++){const a=rot+c*2.1+k, rr=0.42; P.ell(12+Math.cos(a)*rr*R[0],10.5+Math.sin(a)*rr*R[1],big?2.4:1.8,big?1.9:1.4,3);}
+      P.stylizeRock(); P.write(nb); set.push(nb++);}
+    ROCKSETS.push(set);}
   // one guardian hull per planet, painted as a single large picture and cut into sprites
   BOSSART=[];
   for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch); d.draw(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next;
     BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,core:d.core,tur:d.tur});}
   {const P=painter(2,2); GUNSHIP(P); P.stylize(); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
-let BOSSART=[],GUNART=null;
+let BOSSART=[],GUNART=null,ROCKSETS=[];
 // Guardians: visual canvas is 24*cw x 21*ch, facing left. core/tur are offsets from the centre.
 const BOSSDESIGN=[
  {cw:4,ch:3,core:[-18,0],tur:[[-40,-18],[-40,18],[6,-28],[6,28]],draw:P=>{ // Heart of Ignis: molten sphere with flare arms
@@ -1325,9 +1346,8 @@ const SCENE={
   x:{top:52,bot:PB-50,floor:[22,10],ceil:[20,10]},
 };
 const WATER=[[2,8,7],[9,8,7],[11,5,13],[6,14,3],[6,14,3],[6,4,10],[9,2,8]];
-// whole, self-contained rocks from Delta's sprite set (the others are pieces or animation frames)
-const ROCKB=[67,68,73,76,77,84,85,88,90,91];
-const METEORB=[67,73,77,84,88];
+// asteroids come from ROCKSETS (generated, whole, tumbling); big sets are 0-2, medium 3-5
+const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[Math.floor(r()*s.length)];};
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:0,alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
@@ -1436,11 +1456,11 @@ function spawnForm(L,ev){
 }
 function spawnRock(L){
   const r=L.r, P=PLANETS[L.pi];
-  L.en.push({rock:true,b:pick(r,ROCKB),c:pick(r,[P.shades[0],12,P.shades[1]]),x:W+16+r()*40,y:L.yTop+r()*(L.yBot-L.yTop),
+  const set=pick(r,ROCKSETS); L.en.push({rock:true,rfr:set,rph:Math.floor(r()*6),b:set[0],c:pick(r,[P.shades[0],12,P.shades[1]]),x:W+16+r()*40,y:L.yTop+r()*(L.yBot-L.yTop),
     vx:-(0.6+r()*0.9+L.d*0.05)*L.sm,vy:(r()-0.5)*0.5,t:0,delay:0,hp:3+L.d*0.8,val:6,flash:0,rad:10,fc:1e9,pat:'rock'});
 }
 function spawnMeteor(L,delay){
-  const r=L.r; L.en.push({rock:true,meteor:true,pat:'meteor',b:pick(r,METEORB),c:8,x:W*0.35+r()*W*0.75,y:-30,
+  const r=L.r, set=ROCKSETS[3+Math.floor(r()*3)]; L.en.push({rock:true,meteor:true,pat:'meteor',rfr:set,rph:0,b:set[0],c:8,x:W*0.35+r()*W*0.75,y:-30,
     vx:-(1.6+r()*1.2)*L.sm,vy:(1.7+r()*1)*L.sm,t:0,delay,hp:5+L.d*0.6,val:12,flash:0,rad:8,fc:1e9,ex:true});
 }
 function makeCannon(L,side,host,ox,oy){
@@ -1450,7 +1470,7 @@ function makeCannon(L,side,host,ox,oy){
 function spawnIsland(L,withCannon){
   // a tight cluster of whole rocks, packed on a spiral so it reads as one mass
   const r=L.r, n=5+Math.floor(r()*5), rx=14+n*2.6, ry=8+n*1.1, pieces=[];
-  for(let i=0;i<n;i++){const a=i*2.39996+r()*0.3, rr=Math.sqrt((i+0.5)/n); pieces.push({b:pick(r,ROCKB),ox:Math.round(Math.cos(a)*rr*rx),oy:Math.round(Math.sin(a)*rr*ry)});}
+  for(let i=0;i<n;i++){const a=i*2.39996+r()*0.3, rr=Math.sqrt((i+0.5)/n); pieces.push({b:rockFrame(r),ox:Math.round(Math.cos(a)*rr*rx),oy:Math.round(Math.sin(a)*rr*ry)});}
   pieces.sort((p,q)=>p.oy-q.oy);
   const sh=PLANETS[L.pi].shades, y=L.yTop+22+r()*Math.max(1,L.yBot-L.yTop-44);
   const s={island:true,x:W+rx+30,y,pieces,w:rx*2+24,c:L.pi===6?8:(sh[1]===1?sh[0]:sh[1]),mc1:L.pi===6?10:12};
@@ -1636,8 +1656,8 @@ function drawTerrain(L){
   if(rust&&!c.water&&!struct&&(c.floor||c.ceil)){ // Delta's whole rocks set into Rust's ground, evenly spaced
     const step=22, k0=Math.floor(L.wx/step)-1, k1=Math.floor((L.wx+W)/step)+1;
     for(let k=k0;k<=k1;k++){const hs=Math.imul(k+5000,2654435761)>>>0; if(hs%3===0)continue; const x=k*step-L.wx+step/2;
-      if(c.floor)spr(ROCKB[hs%ROCKB.length],x,floorY(L,x)+6,8,{mc1:10});
-      if(c.ceil)spr(ROCKB[(hs>>>8)%ROCKB.length],x,ceilY(L,x)-6,8,{mc1:10});}
+      if(c.floor)spr(ROCKSETS[hs%3][(hs>>>4)%6],x,floorY(L,x)+6,8,{mc1:10});
+      if(c.ceil)spr(ROCKSETS[(hs>>>8)%3][(hs>>>12)%6],x,ceilY(L,x)-6,8,{mc1:10});}
   }
   if(struct){ // clean trim: rivet line and marker lights along the metal
     const off=((L.wx%16)+16)%16;
@@ -1703,7 +1723,7 @@ ST.level={
     // players
     for(const p of L.pl){
       const c=CT[p.id], td=TOUCH.drag[p.id];
-      if(!p.alive){ if(p.resp>0&&--p.resp===0){Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2});} continue; }
+      if(!p.alive){ if(p.resp>0&&--p.resp===0){const spd=p.pw.speed; Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2}); p.pw.speed=spd;} continue; }
       // slow to start: Speed up pods (and the Engine upgrade) make the real difference
       const sp=(1.0+G.engine*0.22+p.pw.speed*0.38)*(1+L.ng*0.12);
       // touch drags are capped to the same top speed, so speed-ups matter on touch too
@@ -1779,7 +1799,7 @@ ST.level={
     const pd=G.planets[L.pi];
     G.stats.levels++;
     if(L.type==='boss'){pd.freed++; G.stats.guardians++; questEvent('guardian',L.pi,11,{path:run?run.done:[]}); pd.run=null;}
-    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); run.pw=L.pl.map(p=>p.alive?{pw:{...p.pw},bar:p.bar,field:p.field}:null);} if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
+    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); run.pw=L.pl.map(p=>p.alive?{pw:{...p.pw},bar:p.bar,field:p.field}:{pw:{speed:p.pw.speed},bar:-1,field:0});} if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
       questEvent('clear',L.pi,L.node.id,{flawless:!L.lost}); }
     save();
   },
@@ -1790,8 +1810,8 @@ ST.level={
     drawBack(L); drawSolids(L); drawTerrain(L);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
-      if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.b,e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
-      if(e.rock)spr(e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
+      if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
+      if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
       else spr(e.T.fr[((e.t/e.T.an)|0)%e.T.fr.length],e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2}); }
     const B=L.boss;
     if(B){ const dying=B.dead&&(B.deathT&4);
