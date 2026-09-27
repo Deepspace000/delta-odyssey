@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.10</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.11</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.10';
+const VERSION='2.11';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -917,7 +917,7 @@ function newGame(){
   return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
-    qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0};
+    qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(G));}catch(e){}}
@@ -951,16 +951,16 @@ function questEvent(kind,pi,node,extra={}){
 function questsOnNode(pi,node){return WORLD[pi].quests.map((q,qi)=>({q,qi,s:qState(pi,qi)})).filter(x=>x.q.node===node&&x.s.st==='active');}
 
 // ---------- shop ----------
-const SHOP=[
-  {id:'spread',name:()=>spreadLv()===0?'Spread shot':spreadLv()<4?'Spread shot level '+(spreadLv()+1):'Spread shot (max)',info:()=>spreadLv()?`Level ${spreadLv()} of 4. More streams, harder hits.`:'Two light shots in a V. Grows to 7 streams.',cost:()=>[2000,3500,5500,8000][spreadLv()]||0,can:()=>spreadLv()<4,buy:()=>{G.spreadLv=spreadLv()+1;G.wep.spread=true;G.weapon='spread';}},
-  {id:'laser',name:()=>laserLv()===0?'Laser':laserLv()<4?'Laser level '+(laserLv()+1):'Laser (max)',info:()=>laserLv()?`Level ${laserLv()} of 4. Longer, thicker, stronger beam.`:'A long blue beam that cuts through lines of enemies.',cost:()=>[2500,4000,6000,9000][laserLv()]||0,can:()=>laserLv()<4,buy:()=>{G.laserLv=laserLv()+1;G.wep.laser=true;G.weapon='laser';}},
-  {id:'homing',name:'Homing missiles',info:'Missiles that chase targets.',cost:()=>3000,can:()=>!G.wep.homing,buy:()=>{G.wep.homing=true;G.weapon='homing';}},
-  {id:'wave',name:'Wave beam',info:'Wide weaving shots.',cost:()=>4000,can:()=>!G.wep.wave,buy:()=>{G.wep.wave=true;G.weapon='wave';}},
-  {id:'power',name:'Weapon power',info:()=>`Level ${G.power} of 5. Slightly harder, faster shots.`,cost:()=>[0,1200,2500,4000,6500][G.power]||0,can:()=>G.power<5,buy:()=>G.power++},
-  {id:'engine',name:'Engine',info:()=>`Level ${G.engine} of 4. A little faster from the start.`,cost:()=>[0,1500,3000,5000][G.engine]||0,can:()=>G.engine<4,buy:()=>G.engine++},
-  {id:'shield',name:'Shield',info:()=>`Level ${G.shield} of 5. One more hit per level.`,cost:()=>[0,1500,3000,5000,8000][G.shield]||0,can:()=>G.shield<5,buy:()=>G.shield++},
-  {id:'bomb',name:'Bomb rack',info:()=>`Holds ${G.bombsMax} of 3 smart bombs.`,cost:()=>[0,1000,2500][G.bombsMax]||0,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
-  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 9.`,cost:()=>2500,can:()=>G.ships<9,buy:()=>G.ships++},
+const SHOP=[   // lv/max drive the level boxes in the station shop: bought levels filled, the next one outlined
+  {id:'spread',name:'Spread shot',lv:()=>spreadLv(),max:4,info:()=>['Two light shots in a V.','Next: 3 streams, harder hits.','Next: 5 streams, harder hits.','Next: 7 streams, harder hits.'][spreadLv()]||'Seven streams at full strength.',cost:()=>[2000,3500,5500,8000][spreadLv()]||0,can:()=>spreadLv()<4,buy:()=>{G.spreadLv=spreadLv()+1;G.wep.spread=true;G.weapon='spread';}},
+  {id:'laser',name:'Laser',lv:()=>laserLv(),max:4,info:()=>laserLv()>=4?'Full length and strength.':laserLv()?'Next: a longer, stronger beam.':'A beam that pierces lines.',cost:()=>[2500,4000,6000,9000][laserLv()]||0,can:()=>laserLv()<4,buy:()=>{G.laserLv=laserLv()+1;G.wep.laser=true;G.weapon='laser';}},
+  {id:'homing',name:'Homing missiles',lv:()=>homingLv(),max:4,info:()=>['Missiles that chase targets.','Next: two missiles.','Next: a harder-hitting pair.','Next: three missiles.'][homingLv()]||'Three missiles at full strength.',cost:()=>[3000,4500,6500,9000][homingLv()]||0,can:()=>homingLv()<4,buy:()=>{G.homingLv=homingLv()+1;G.wep.homing=true;G.weapon='homing';}},
+  {id:'wave',name:'Wave beam',lv:()=>waveLv(),max:4,info:()=>['Wide weaving shots.','Next: stronger strands.','Next: a third, straight strand.','Next: a double weave.'][waveLv()]||'Double weave at full strength.',cost:()=>[4000,5000,7000,9500][waveLv()]||0,can:()=>waveLv()<4,buy:()=>{G.waveLv=waveLv()+1;G.wep.wave=true;G.weapon='wave';}},
+  {id:'power',name:'Weapon power',lv:()=>G.power,max:5,info:()=>G.power<5?'Next: harder, faster shots.':'Full power.',cost:()=>[0,1200,2500,4000,6500][G.power]||0,can:()=>G.power<5,buy:()=>G.power++},
+  {id:'engine',name:'Engine',lv:()=>G.engine,max:4,info:()=>G.engine<4?'Next: a faster ship.':'Top speed.',cost:()=>[0,1500,3000,5000][G.engine]||0,can:()=>G.engine<4,buy:()=>G.engine++},
+  {id:'shield',name:'Shield',lv:()=>G.shield,max:5,info:()=>G.shield<5?'Next: one more hit.':'Full shield.',cost:()=>[0,1500,3000,5000,8000][G.shield]||0,can:()=>G.shield<5,buy:()=>G.shield++},
+  {id:'bomb',name:'Bomb rack',lv:()=>G.bombsMax,max:3,info:()=>G.bombsMax<3?'Next: one more smart bomb.':'Carries 3 smart bombs.',cost:()=>[0,1000,2500][G.bombsMax]||0,can:()=>G.bombsMax<3,buy:()=>G.bombsMax++},
+  {id:'ship',name:'Extra ship',info:()=>`You have ${G.ships}. Max 20.`,cost:()=>2500,can:()=>G.ships<20,buy:()=>G.ships++},
 ];
 
 // ---------- toasts ----------
@@ -2252,7 +2252,7 @@ ST.hub={
     rect(0,0,W,13,0); rect(0,13,W,1,11);
     txt('Credits '+G.credits,4,3,7,7); txt('Ships '+G.ships,110,3,15,7);
     txt('Planets freed '+G.planets.filter(p=>p.freed>0).length+'/7',175,3,13,7); txt('Open '+G.unlocked+'/7',300,3,3,7);
-    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
+    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); txt('Ship power '+shipPower(),4,17,14,5); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
     const h=this.hover;
     if(h){
       frame(8,H-38,W-16,30,h.station?3:PLANETS[h.pi].shades[1],0);
@@ -2260,7 +2260,7 @@ ST.hub={
         txt(`Quests and upgrades.${done?' '+done+' reward'+(done>1?'s':'')+' waiting.':''}  ${OKW()} to dock.`,16,H-20,15,6);}
       else{const P=PLANETS[h.pi], pd=G.planets[h.pi];
         txt(P.name,16,H-33,P.shades[2]===1?P.shades[1]:P.shades[2],8);
-        txt('Threat '+'*'.repeat(P.diff)+'.'.repeat(7-P.diff)+(G.ngp?'  +'+G.ngp:''),110,H-32,10,7);
+        {const t=planetThreat(h.pi), sp=shipPower(); txt('Threat '+t+(G.ngp?' (NG+'+G.ngp+')':''),110,H-32,10,7); txt('Your ship '+sp,G.ngp?225:175,H-32,sp>=t?13:sp>=t*0.8?7:10,7);}
         if(!isUnlocked(h.pi)){txt('Locked. Finish a quest on '+PLANETS[UNLOCK_ORDER[UNLOCK_ORDER.indexOf(h.pi)-1]].name+' to open it.',16,H-20,10,6);}
         else{const q=allQuests().filter(x=>x.pi===h.pi&&x.s.st==='active').length;
         txt(`Levels found ${pd.seen.length}/11. ${pd.freed?'Freed x'+pd.freed+'. ':''}${pd.run?'Route in progress. ':''}${q?q+' quest'+(q>1?'s':'')+' active. ':''}${OKW()} to land.`,16,H-20,15,6);}}
@@ -2293,14 +2293,14 @@ ST.station={
       const s=SHOP[this.sel];
       if(MENU.ok){ if(!s.can()){SND.sfx('deny');toast('Already maxed out.',80);}
         else if(G.credits<s.cost()){SND.sfx('deny');toast('Not enough credits.',80);}
-        else {G.credits-=s.cost(); s.buy(); SND.sfx('coin'); toast((s.id==='laser'?'Laser level '+laserLv():s.id==='spread'?'Spread shot level '+spreadLv():s.name)+(['spread','laser','homing','wave'].includes(s.id)?' bought and equipped.':' bought.'),100); save();} }
+        else {G.credits-=s.cost(); s.buy(); SND.sfx('coin'); toast(s.name+(s.max>1?' level '+s.lv():'')+(['spread','laser','homing','wave'].includes(s.id)?' bought and equipped.':' bought.')+' Ship power '+shipPower()+'.',120); save();} }
     }
   },
   draw(){
     drawStars(0.15,this.t);
     frame(10,8,W-20,H-16,3,0);
     txt('Space station',20,15,3,10);
-    txt('Credits '+G.credits,W-20,17,7,7,'right');
+    txt('Credits '+G.credits,W-20,17,7,7,'right'); txt('Ship power '+shipPower(),W-100,17,14,7,'right');
     ['Quests','Shop'].forEach((s,i)=>{const on=this.tab===i; frame(20+i*70,32,64,14,on?7:11,on?6:0); txt(s,52+i*70,36,on?1:12,7,'center'); hit(20+i*70,30,64,18,()=>{if(this.tab!==i){this.tab=i;this.sel=0;this.top=0;SND.sfx('sel');}});});
     txt(this.tab===0?'Active '+activeCount()+'/3':'',180,37,13,6);
     txt('Left/right: switch tab',W-20,37,11,6,'right');
@@ -2328,9 +2328,12 @@ ST.station={
       SHOP.forEach((s,i)=>{const y=y0+i*16, on=i===this.sel, can=s.can();
         if(on)rect(18,y-2,W-36,15,6);
         hit(18,y-2,W-36,15,()=>{if(this.sel===i)KP.Enter=true; else {this.sel=i;SND.sfx('sel');}});
-        const nm=typeof s.name==='function'?s.name():s.name; txt(nm,24,y,can?(on?1:12):11,7);
-        txt(typeof s.info==='function'?s.info():s.info,130,y+1,on?15:11,6);
-        txt(can?s.cost()+' cr':'owned',W-24,y,can?(G.credits>=s.cost()?7:10):11,7,'right');});
+        txt(s.name,24,y,can?(on?1:12):11,7);
+        if(s.max){const lv=s.lv(); for(let k=0;k<s.max;k++){const x=100+k*8;   // one box per level: bought filled, next outlined
+          if(k<lv)rect(x,y,6,6,7); else frame(x,y,6,6,k===lv&&can?(G.credits>=s.cost()?1:12):11,on?6:0);}}
+        txt(typeof s.info==='function'?s.info():s.info,146,y+1,on?15:11,6);
+        txt(can?s.cost()+' cr':s.max>1?'max':'owned',W-24,y,can?(G.credits>=s.cost()?7:10):11,7,'right');
+        if(can&&on){const g=powerAfter(s)-shipPower(); if(g>0)txt('+'+g+' power',W-70,y+1,13,6,'right');}});
       txt(TOUCH.on?'Tap an item, tap again to buy':'Fire: buy   Esc: leave',W/2,H-20,11,6,'center');
     }
   }
@@ -2452,6 +2455,25 @@ function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,c
   bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),hist:[],field:0,psh:0,pshD:0,pshCool:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0,wx:40,wy:100,whp:0,winv:0,wcool:0};}
 function laserLv(){return G.laserLv||(G.wep.laser?1:0);}
 function spreadLv(){return G.spreadLv||(G.wep.spread?1:0);}
+function homingLv(){return G.homingLv||(G.wep.homing?1:0);}
+function waveLv(){return G.waveLv||(G.wep.wave?1:0);}
+const WLVF={spread:spreadLv,laser:laserLv,homing:homingLv,wave:waveLv};
+// each weapon's firepower per level as a multiple of the starting pulse, measured in the engine against a lone
+// target, a close one, a line, a column and a scattered group (averaged)
+const WPOW={pulse:[1,1],spread:[0,1.32,2.35,3.31,4.04],laser:[0,1.61,2.15,2.88,3.8],homing:[0,1.06,1.62,2.35,3.09],wave:[0,1.37,1.73,2.67,3.08]};
+// ship power: one number for everything bought - firepower (best weapon, a bit for the others, x Weapon power), shield, engine and bomb
+// rack. A new ship is 10, everything maxed is 100. Planet threat uses the same scale, so the two compare directly.
+function shipPower(){
+  const f=ownedWeapons().map(w=>WPOW[w][w==='pulse'?1:WLVF[w]()]||1).sort((a,b)=>b-a), pw=G.power;
+  const fire=(f[0]+0.15*f.slice(1).reduce((a,v)=>a+v-1,0))*(1+(pw-1)*0.2)/((11-Math.ceil(pw/2))/10);   // the best weapon, plus a little for each other one
+  return Math.min(100,Math.round(10*Math.pow(fire,0.54)*Math.pow(G.shield,0.4)*Math.pow((0.65+G.engine*0.12)/0.77,0.6)*Math.pow(G.bombsMax,0.1)));
+}
+const THREAT=[10,14,19,26,36,50,69];   // by planet difficulty 1-7 (Rust .. Ignis)
+function planetThreat(pi){return Math.round(THREAT[PLANETS[pi].diff-1]*(1+0.6*(G.ngp||0)));}
+// the ship power a shop item would give (buy it on a copy of the save, then put everything back)
+const BUYF=['power','engine','shield','bombsMax','ships','weapon','spreadLv','laserLv','homingLv','waveLv'];
+function powerAfter(s){const wep={...G.wep}, keep={}; for(const k of BUYF)keep[k]=G[k]; s.buy(); const v=shipPower();
+  Object.assign(G,keep); for(const k in G.wep)if(!(k in wep))delete G.wep[k]; Object.assign(G.wep,wep); return v;}
 function ownedWeapons(){return WEAPONS.filter(w=>G.wep[w]);}
 
 // ---------- terrain ----------
@@ -2658,17 +2680,25 @@ function aimShot(L,x,y,spd,spread=0){
   const a=Math.atan2(tgt.y-y,tgt.x-x)+spread; spd*=(1+L.ng*0.25)*(1+L.heat*0.04)*(0.5+0.5*L.ease); ebPush(L,{x,y,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd,t:0});
 }
 function optionPos(p,k){const i=p.trail.length-1-(k+1)*14; return i>=0?p.trail[i]:{x:p.x-(k+1)*14,y:p.y};}
+// the bought weapons, levels 1-4 (index 0 unused): each is a real alternative to the pulse, not an add-on
+const WLV={
+  spread:{n:[0,2,3,5,7],dmg:[0,0.66,0.84,0.96,1.08],cool:[0,10,11,11,11],ang:[0,0.05,0.13,0.13,0.13]},   // the centre stream hits double
+  laser:{dmg:[0,1.2,1.6,2.1,2.7],cool:[0,12,12,12,12],len:[0,48,64,80,100]},
+  homing:{n:[0,1,2,2,3],dmg:[0,2.2,1.7,2.3,2.0],cool:[0,22,22,20,20]},
+  wave:{st:[[],[[1,10,0],[-1,10,0]],[[1,10,0],[-1,10,0]],[[1,14,0],[-1,14,0],[0,0,0]],[[1,10,0],[-1,10,0],[1,22,1.6],[-1,22,1.6]]],dmg:[0,0.75,0.95,1.05,0.95],cool:[0,11,11,11,11]}};
 function mainPattern(L,p,x,y,mul){
   const ws=ownedWeapons(); if(p.w>=ws.length)p.w=0; const w=ws[p.w], pw=G.power, start=L.pb.length;
+  const pm=1+(pw-1)*0.2, cm=(11-Math.ceil(pw/2))/10;   // Weapon power: the same boost for every weapon
   const shot=(o)=>L.pb.push(Object.assign({x,y,vx:7,vy:0,dmg:1,kind:w,t:0,pierce:false,r:3,owner:p.id},o));
   let cool=8;
   switch(w){
-    case 'pulse': shot({vx:7.5,dmg:1+(pw-1)*0.2}); cool=11-Math.ceil(pw/2); break;
-    case 'spread': {const lv=Math.max(1,spreadLv()), n=[0,2,3,5,7][lv], dm=[0,0.66,0.84,0.96,1.08][lv]*(1+(pw-1)*0.1); for(let i=0;i<n;i++){const a=(i-(n-1)/2)*(n===2?0.22:0.13); shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:dm});} cool=[0,16,14,13,11][lv]-Math.floor(pw/3); break;}
-    case 'laser': {const lv=laserLv(); shot({vx:11,dmg:[0,1.2,1.6,2.1,2.7][lv]*(1+(pw-1)*0.1),pierce:true,r:3,len:[0,48,64,80,100][lv],th:lv-1}); cool=[0,16,15,14,13][lv]-Math.floor(pw/3); break;}
-    case 'homing': {const n=pw>=4?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2+(pw-1)*0.2,r:4}); cool=24-pw; break;}
-    case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2+(pw-1)*0.1,r:6,ph:s,y0:y}); cool=12-Math.ceil(pw/2); break;
+    case 'pulse': shot({vx:7.5,dmg:pm}); cool=10*cm; break;
+    case 'spread': {const lv=Math.max(1,spreadLv()), T=WLV.spread, n=T.n[lv]; for(let i=0;i<n;i++){const c=i===(n-1)/2, a=(i-(n-1)/2)*T.ang[lv]; shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:T.dmg[lv]*pm*(c?2:1),r:c?4:3,core:c});} cool=T.cool[lv]*cm; break;}
+    case 'laser': {const lv=Math.max(1,laserLv()), T=WLV.laser; shot({vx:11,dmg:T.dmg[lv]*pm,pierce:true,r:3,len:T.len[lv],th:lv-1}); cool=T.cool[lv]*cm; break;}
+    case 'homing': {const lv=Math.max(1,homingLv()), T=WLV.homing, n=T.n[lv]; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:T.dmg[lv]*pm,r:4}); cool=T.cool[lv]*cm; break;}
+    case 'wave': {const lv=Math.max(1,waveLv()), T=WLV.wave; for(const [ph,amp,po] of T.st[lv])shot({vx:5.5,dmg:T.dmg[lv]*pm,r:6,ph,amp,po,y0:y}); cool=T.cool[lv]*cm; break;}
   }
+  cool=Math.round(cool);
   if(mul!==1)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=mul;
   return cool;
 }
@@ -2930,7 +2960,7 @@ function drawPowerBar(L){
   });
   const x=300, ws=ownedWeapons();
   L.pl.forEach((p,i)=>{const y=PB+2+i*7;
-    {const wn=ws[Math.min(p.w,ws.length-1)]; txt((L.pl.length>1?(i?'2 ':'1 '):'')+WNAME[wn]+(wn==='laser'?' '+laserLv():wn==='spread'?' '+spreadLv():''),x,y,p.c,5);}
+    {const wn=ws[Math.min(p.w,ws.length-1)]; txt((L.pl.length>1?(i?'2 ':'1 '):'')+WNAME[wn]+(WLVF[wn]?' '+WLVF[wn]():''),x,y,p.c,5);}
     for(let s=0;s<G.shield+2;s++)rect(x+40+s*4,y+2,3,3,s<p.shield?13:11);
     txt('B'+p.bombs,W-3,y,10,5,'right');});
   const cur=p0&&p0.bar>=0?POWERS[p0.bar]:null, lvl=cur?p0.pw[cur.id]:0, mx=cur&&cur.id!=='nova'&&lvl>=cur.max;
@@ -3027,7 +3057,7 @@ ST.level={
           const na=cur+clamp(da,-0.12,0.12); b.vx=Math.cos(na)*s; b.vy=Math.sin(na)*s;} else b.vx+=0.1;
         if(b.t%3===0)L.fx.push({x:b.x-3,y:b.y,t:0,puff:true});}
       if(b.ay)b.vy+=b.ay;
-      b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25)*10*b.ph; else b.y+=b.vy;
+      b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25+(b.po||0))*(b.amp??10)*b.ph; else b.y+=b.vy;
       if(b.x>W+20||b.x<-20||b.y<-10||b.y>H+10||b.t>200)b.dead=true;
       else if(terrainHit(L,b.x,b.y,1)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
       else if(L.so.length&&shootSolid(L,b.x,b.y,2,b.blast?0:b.dmg)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
@@ -3106,7 +3136,7 @@ ST.level={
     for(const b of L.pb){
       switch(b.kind){
         case 'pulse': rect(b.x-4,b.y,8,1,1); rect(b.vx<0?b.x+4:b.x-8,b.y,4,1,b.pst?[0,3,13,7,10][b.pst]:15); if(b.pst>=3)rect(b.vx<0?b.x+8:b.x-12,b.y,4,1,b.pst===4?2:3); break;
-        case 'spread': rect(b.x-1,b.y-1,3,3,13); rect(b.x,b.y,1,1,1); break;
+        case 'spread': if(b.core){rect(b.x-2,b.y-2,5,4,13); rect(b.x-1,b.y-1,3,2,1);} else {rect(b.x-1,b.y-1,3,3,13); rect(b.x,b.y,1,1,1);} break;
         case 'laser': {const L0=Math.min(b.len,b.t*11+10), th=b.th; rect(b.x-L0,b.y-th-1,L0,th*2+3,6); rect(b.x-L0+2,b.y-th,L0-2,th*2+1,14); rect(b.x-L0+4,b.y,L0-4,1,1); rect(b.x-2,b.y-th-1,3,th*2+3,(b.t>>1)&1?1:3); break;}
         case 'homing': rect(b.x-2,b.y-1,5,2,7); rect(b.x+2,b.y-1,1,2,1); break;
         case 'wave': rect(b.x-2,b.y-3,4,6,4); rect(b.x-1,b.y-2,2,4,10); break;
