@@ -106,7 +106,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.91</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.92</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -647,7 +647,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='1.91';
+const VERSION='1.92';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -1739,7 +1739,8 @@ function heatOf(L){
   const shop=(G.power-1)*0.8+(ownedWeapons().length-1)*0.4+(G.engine-1)*0.2;
   for(const p of L.pl){ if(!p.alive)continue; let s=shop; for(const P of POWERS)s+=(P.id==='wing'&&!p.whp?0:(p.pw[P.id]||0))*P.w; best=Math.max(best,s); }
   if(L.pl.length>1)best+=1;
-  let lv=0; for(const t of REINF)if(best>=t)lv++; return lv;
+  let lv=0; for(const t of REINF)if(best>=t)lv++;
+  const cap=[5,5,5,5,4,3,2][L.pi]; return Math.min(lv,cap+(L.ng||0));   // early planets cap the reinforcements
 }
 function nova(L){
   SND.sfx('bomb'); L.flash=18; L.eb.length=0;
@@ -1858,7 +1859,7 @@ function updateEnemy(L,e){
   }
   if(e.x>-20&&e.x<W+20)e.ex=true;
   if(e.ex&&(e.x<-40||e.x>W+50||e.y<-50||e.y>H+40))e.dead=true;
-  if(!e.rock&&e.pat!=='jump'&&(L.d>=2||L.heat>=1||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
+  if(!e.rock&&e.pat!=='jump'&&(L.d>=2||L.heat>=(L.pi===6?2:1)||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
     e.fc=Math.max(50,(e.turret?110:320-L.d*20))*(e.elite?0.55:1)*(0.7+L.r()*0.6)/(1+L.ng*0.4);
     e.fc/=(1+L.heat*0.5); const n=L.heat>=4?5:L.heat>=2?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
 }
@@ -1981,7 +1982,7 @@ ST.level={
     // players
     for(const p of L.pl){
       const c=CT[p.id], td=TOUCH.drag[p.id];
-      if(!p.alive){ if(p.resp>0&&--p.resp===0){const keep={pw:p.pw,bar:p.bar,hist:p.hist}; Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2},keep); p.field=p.pw.field; p.whp=p.pw.wing?wingMax(p):0; p.gx=p.x; p.gy=p.y; p.wx=p.x-20; p.wy=p.y+30;} continue; }
+      if(!p.alive){ if(p.resp>0&&--p.resp===0){const keep={pw:p.pw,bar:p.bar,hist:p.hist}; Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2},keep); p.inv=180; for(const b of L.eb)if(dist2(b.x,b.y,p.x,p.y)<90*90)b.dead=true; p.field=p.pw.field; p.whp=p.pw.wing?wingMax(p):0; p.gx=p.x; p.gy=p.y; p.wx=p.x-20; p.wy=p.y+30;} continue; }
       // slow to start: Speed up pods (and the Engine upgrade) make the real difference
       const sp=(0.65+G.engine*0.12+p.pw.speed*0.5)*(1+L.ng*0.12);
       // touch drags are capped to the same top speed, so speed-ups matter on touch too
