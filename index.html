@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.09</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.10</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.09';
+const VERSION='2.10';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -2664,7 +2664,7 @@ function mainPattern(L,p,x,y,mul){
   let cool=8;
   switch(w){
     case 'pulse': shot({vx:7.5,dmg:1+(pw-1)*0.2}); cool=11-Math.ceil(pw/2); break;
-    case 'spread': {const lv=Math.max(1,spreadLv()), n=[0,2,3,5,7][lv], dm=[0,0.55,0.7,0.8,0.9][lv]*(1+(pw-1)*0.1); for(let i=0;i<n;i++){const a=(i-(n-1)/2)*(n===2?0.22:0.13); shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:dm});} cool=[0,16,14,13,11][lv]-Math.floor(pw/3); break;}
+    case 'spread': {const lv=Math.max(1,spreadLv()), n=[0,2,3,5,7][lv], dm=[0,0.66,0.84,0.96,1.08][lv]*(1+(pw-1)*0.1); for(let i=0;i<n;i++){const a=(i-(n-1)/2)*(n===2?0.22:0.13); shot({vx:Math.cos(a)*6.5,vy:Math.sin(a)*6.5,dmg:dm});} cool=[0,16,14,13,11][lv]-Math.floor(pw/3); break;}
     case 'laser': {const lv=laserLv(); shot({vx:11,dmg:[0,1.2,1.6,2.1,2.7][lv]*(1+(pw-1)*0.1),pierce:true,r:3,len:[0,48,64,80,100][lv],th:lv-1}); cool=[0,16,15,14,13][lv]-Math.floor(pw/3); break;}
     case 'homing': {const n=pw>=4?2:1; for(let i=0;i<n;i++)shot({vx:2.5,vy:(i-(n-1)/2)*1.6,dmg:2.2+(pw-1)*0.2,r:4}); cool=24-pw; break;}
     case 'wave': for(const s of[1,-1])shot({vx:5.5,dmg:1.2+(pw-1)*0.1,r:6,ph:s,y0:y}); cool=12-Math.ceil(pw/2); break;
