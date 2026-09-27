@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.12</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.13</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.12';
+const VERSION='2.13';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -894,6 +894,172 @@ function planetPool(pi){
   const pc=sh[1]===1?sh[2]:sh[1];
   return [...NEW_BY_PLANET[pi].map(t=>({t,c:ETYPES[t].c})), ...old.map((t,i)=>({t,c:i?14:pc}))];
 }
+// MAPICON-BEGIN: route-map icons, one per area (drawn to match its name), 12 per planet in node order (11 = guardian).
+// '.' clear, 'g' grey, 'c' the node type's colour, 'k' black; each line holds that row of all 12 icons.
+const MAPICON=[
+[ // Ignis
+'............ ...kgk...... ............ ............ ......kk.... ............ ............ ............ ............ ............ .k........k. ............',
+'............ ...kgk...... ............ ............ .....kggk... ............ .......kk... ............ ............ ............ kgkk....kkgk ............',
+'............ ...kk.....k. ............ ..k......... ...kkgccgk.. ......k..... ......kggk.. ............ ............ ............ .kggkkkkggk. ...kk..kk...',
+'............ ..kgk....kgk ............ .kgk........ ..kggcccck.. .....kgk.... ......kcck.. ............ ............ ............ ..kggggggk.. ..kggkkggk..',
+'............ ..kgk....kgk .....kk..... .kck.....k.. .kgcccccck.. .....kgk.... ......kcck.. ........k... ............ ............ ...kggggk... .kgccggccgk.',
+'............ .kgk..k..kgk ....kggk.... .kck....kgk. .kcccccccgk. .....kgk.... ......kcck.. .....kkkgk.. .........k.. .....kk..... ....kggk.... .kcccccccck.',
+'............ .kgk.kgkkgk. ...kgccgkk.. .kck....kck. .kccccccccgk .....kgk.... ......kcck.. ....kggkggk. ........kgk. ....kkkk.... ....kggk.... .kcccccccck.',
+'.k........k. kgck.kgkkgk. ..kgccccggk. .kck..k.kck. .kccccccccck ..k..kgk.... ..kkkkkcck.. ...kgccgggk. ..k..k..kck. ...kgkkk.... ....kcck.... .kccckcccck.',
+'kgk......kgk kcck.kgkkgk. ..kccccccgk. .kck.kgkkck. .kccccccccck ..k...kk..k. .kgggggccgk. ...kccccgk.. .kgkkgk.kck. ...kgkkck... ....kcck.... .kccckcccck.',
+'kck......kck .kk.kgkkgk.. .kgcckkccck. .kckkkgkkck. .kccccccccck .kk...kckkck .kcccccccck. ..kgckkcck.. .kckkck.kck. ...kckkck... ....kcck.... .kccckcccck.',
+'.kgk....kgk. ....kgkgck.. .kggk..kcck. kgcgggggkck. ..kcckkkcck. kgk...kck.k. .kcccccccck. ..kcckkcck.. .kckkcgkkck. ..kgckkcgk.. .....kk..... .kcccccccck.',
+'.kckkkkkkck. ....kgkcck.. .kggk..kcck. kcccgggggcgk ...kk...kk.. kgk...kck.k. .kcccccccck. ..kck..kck.. .kckkcckkck. ..kgckkcck.. ....kcck.... .kccckcccck.',
+'.kckggggkck. ...kgkkcck.. ..kk...kcck. kccckkgkccck .....k....k. kgk...kck.k. .kcckkkkcck. .kgck..kcgk. .kckgcckgcgk ..kgckkcck.. ....kcck.... ..kcccccck..',
+'..kgccccgk.. ..kggkkcck.. .......kcck. kccckkgkccck ...kkgk..kgk kgk..kkck.k. .kccggggcck. .kcck..kcck. kgcgccckccck ..kcckkcck.. ....kcck.... ..kccckcck..',
+'..kcccccck.. .kgcck.kk... .kkkkkkgcck. kccck.kkccck ..kgkk..k.k. kgkkkgkck.k. .kccggggcck. .kck....kck. kcccccckccck .kgcckkccgk. .....kk..... ...kcccck...',
+'kkgccccccgkk .kccck...... kggggggcccgk kccck..kccck ...k...kgk.. kckckgkck.k. .kccggggcck. .kck....kck. kckcccckckck .kgccccccck. ....kcck.... ...kcckck...',
+'gkcccggccckg .kccck...... kcccccccccck kccck..kccck ........k... kckckgkck.k. .kcckkkkcck. .kckkkkkkck. kckcccckckck .kcccccccck. ....kcck.... ...kcckck...',
+'cgccggggccgc .kccck...... kcccccccccck kccck..kccck ....k..k.... kckckgkck.k. .kcccccccck. .kckggggkck. kckcccckckck kgccccccccgk ...kcccck... ....kcck....',
+'kccggggggcck ..kck....... kcccccccccck kccck..kccck ...kgkkgkk.. kccckgcck.k. .kcccccccck. ..kgccccgk.. kckcccckckck kcccccccccck ...kcccck... ....kcck....',
+'kccggggggcck ...k........ .kkkkkkkkkk. .kkk....kkk. ....k..kkgk. .kkk.kkk.... ..kkkkkkkk.. .kgccccccgk. .k.kkkk.k.k. .kkkkkkkkkk. ....kkkk.... .....kk.....',
+'kccggggggcck ............ ............ ............ .........k.. ............ ............ .kcccccccck. ............ ............ ............ ............',
+],
+[ // Aurum
+'............ ............ ............ ............ ............ ............ ......kk.... ............ ............ ............ .....kk..... ............',
+'............ .kk......... ............ ............ ....k....... ............ .....kggk... ............ ............ ............ ....kggk.... .....kk.....',
+'............ kggk........ ............ ............ ...kgk...... ....k.kk.... ...kkgccgk.. ............ ..........k. .....kk..... ....kggk.... ..k.kggk....',
+'.k..k...kkk. gccgk....... ....kkkk.... ............ ....k..kk... ...kgkggk... ..kggcccck.. ............ .k...k...kgk ....kggk.... .kk.kggk.kk. .kgkkggk....',
+'kgkkgk.kgggk cccck....... ...kggggk... ....kkkk.... ..kkk.kggk.. ..kggkgggk.. .kgcccccck.. ............ kgk.kgkk..k. ...kgccgk... kggkkggkkggk .kgkkggkk...',
+'kckkck.kccck cccck....... ....kkkk.... ..kkcccckk.. .kgggkkggk.. ..kgckccgk.. .kcccccccgk. ............ .k.kgcggk... ..kgccccgk.. kggk.kk.kggk .kgggggggk..',
+'kcgkcgkkccck ccccgkkkk... ....kkkk.... .kccckkccck. .kggk.kggk.. .kgcckcccgk. .kccccccccgk ....kkkk.... ..kgckcck... .kgccccccgk. kggkkgk.kggk .kgggggggk..',
+'.kckkckkccck cccccggggk.. ...kggggk... .kckkkkkkck. .kggk.kggk.. .kgccccccgk. .kccccccccck ..kkcccckk.. .kgck.kcgk.. kgccccccccgk kggkkcgkkggk .kgggggggk..',
+'.kckkckkckck ccccckkkcgk. ....kkkkkkkk kckkcccckkck .kggk..kk... .kgcckcccgk. .kccccccccck kkccckkccckk .kck.k.kck.. .kkkkkkkkkk. .kk.kcck.kk. ..kcccccck..',
+'.kcgkcgkckck ccccck..kcgk ...kgggggggg kckckggkckck ..kk........ .kgccggccgk. .kccccccccck cccckggkcccc .kckkgkkck.. .kgkgkgkkgk. .kgkgcckkgk. ..kcccccck..',
+'..kckkckckck ccccck...kck ....kkkkkkkk kckckggkckck ....kkkk.... .kcccggccck. ..kcckkkcck. ccckggggkccc .kckgckkck.. .kckckckkck. .kcgcccggck. ..kcccccck..',
+'..kckkckckck ccccck...kck kkkkkkkkkkkk kckckggkckck ...kggggk... .kcccggccck. ...kkkgkkk.. ccckggggkccc .kckck.kckk. .kckckckkck. .kcccccccck. ..kckcckck..',
+'.kgckgckckck ccccck..kgck gggggggggggg kckckggkckck ...kcccck... .kgccggccgk. .....kk..... cccckggkcccc .kckck.kckgk .kckckckkck. .kcccccccck. ..kckcckck..',
+'.kckkckkckck ccccckkkgck. kkkkkkkkkkkk kckkcccckkck ...kcccck... .kgccccccgk. ....kgk..... kkccckkccckk .kckkgkgkkck .kckckckkck. .kcccccccck. ..kckcckck..',
+'.kckkckkckck cccccgggck.. gggggggggggg .kckkkkkkck. ..kkcccckk.. .kgccckccgk. ....kggk.... ..kkcccckk.. .kckkcgckkck .kckckckkck. .kcccccccck. ..kckcckck..',
+'kgckgckkckck ccccckkkk... kkkkkkkkkkkk .kccckkccck. .kggccccggk. .kgccckccgk. ....kggk.... ....kkkk.... .kck.kkkkgck .kckckckkck. .kcccccccck. ..kcccccck..',
+'kckkck.kckck cccck....... kkkkkkkkkkkk ..kkcccckk.. .kcccccccck. ..kgcckcgk.. .....kk..... ............ ..kgk...kck. .kkkkkkkkkk. .kcccccccck. ..kcccccck..',
+'kckkck.kckck cccck....... gggggggggggg ....kkkk.... .kcccccccck. ..kggggggk.. .....k...... ............ ..kcgkkkgcgk kggggggggggk .kcccccccck. ..kcccccck..',
+'.k..k...k.k. cccck....... kkkkkkkkkkkk ............ .kcccccccck. ...kgkggk... ....kgk..... ............ ...kcgggckk. kcccccccccck ..kkkkkkkk.. ...kcccck...',
+'............ kcck........ ............ ............ ..kkkkkkkk.. ....kkkk.... .....k...... ............ ....kccck... .kkkkkkkkkk. ............ ...kcccck...',
+'............ .kk......... ............ ............ ............ .....k...... ............ ............ .....kkk.... ............ ............ ....kkkk....',
+],
+[ // Verdant
+'............ ............ .k.......... ............ ....k....... ............ ....kggk.... kkkkkkkkkkkk ............ ............ ....kkkk.... ............',
+'............ ............ kgk.k....... ............ ...kgk.k.... ......k..... .k..kggk.... gggggggggggg ............ ....kkkk.... ...kggggk... ............',
+'............ .kkkkk...... kgkkgk...... ............ .k..k.kgk... .....kgk.... kgk..kk...k. kckkckkkkkck ....kkkk.... ...kcccck... ..kgccccgk.. .....kkk....',
+'......k..... kgggggk..... kgkggk...... ............ kgk....k..k. ..k..kgkk... kgk......kgk kckkckgk.kck ...kcccck... ..kcccccck.. ..kcccccck.. ....kkkkk...',
+'.....kgkk... kgggggk..... kgggk..k.... ...k........ .k.......kgk .kgk.kgkgk.. .kck.....kgk kckkckckkgk. ..kcccccck.. .kgcccccck.. .kgccccccgk. ...kkccckkk.',
+'....kkckgk.. .kkkkkkkkkk. .kgkgkkgk... ..kck....... ..........k. .kgk..kkgk.. .kck....kck. .kgkkgckkck. ..kcccccck.. .kccckkccck. .kcccccccck. ..kkcccckkk.',
+'...kgkckck.. ....kggggggk kgggcggcgk.. .kcck....... ..k......... .kgk..kcgk.. ..kck..kck.. .kckkcckkck. .kcccccccck. .kcckkkkcck. .kcccccccck. ..kcccccck..',
+'...kckckck.. ....kggggggk kgkckcckck.. .kggk....... .kgkkkkk.k.. ..kkk.kcck.. ...kk..kck.. .kckkckgkck. .kcggggggck. kccgkkkkkcck .kcccccccck. ..kcccccck..',
+'...kckkkckk. ..kkkkkkkkk. kgkckcckck.. .kcck....... ..kkcccckgk. ..kcgkkccgk. ...kckkck... .kck.kkckck. .kcckkkkcck. kcckkcckkcck .kcccccccck. ..kcccccck..',
+'...kck..kggk .kggggk..... .kkcccccck.. .kcck...k... ...kcccckk.. ..kcgkcccgk. ....kcck.... kgk..kkckkgk .kckkkkkkck. kcckckkckcck .kcccccccck. ..kcgccgck..',
+'..kkk...kcck .kggggk..... ..kkckkckk.. .kcck..kck.. ...kcccck... ..kcgkcccgk. ....kcck.... kck.kgkckkck .kckkkkkkck. kcckckkckcck .kcccccccck. ..kcgccgck..',
+'.kggk....kk. ..kkkkk..... .kggkggkggk. .kcck.kgggk. ..kckggkck.. ..kcckcccck. ....kcck.... kck.kckckkcg .kckkkkkkck. kcckckkckcck .kcccccccck. ..kcgccgck..',
+'.kcck.....k. .kk.kggk.kk. .kcckcckcck. .kcck.kccck. ..kccggcck.. .kcccccccck. ...kccck.... gk..kckck.kc .kckkkkkkck. kcckckkckcck ..kcccccck.. ..kcgccgck..',
+'.kcck....kgk kggkgccgkggk ..kk.kk.kk.. .kcck.kccck. ..kccggcck.. .kcccccccck. ...kckkck... ck..kcgk..kc .kcckkkkcck. kcckkcckkcck ..kcccccck.. .kccccccck..',
+'kgccgk...kck gcckccckgccg ..kk.kk.kk.. .kcck.kccck. ..kckggkck.. .kcccccccck. ..kck.kck... ck..kcck..kc .kcggggggck. kcckkkkkgcck ...kcccck... .kccccccck..',
+'kcccck....k. ccckccckcccc .kcckcckcck. .kcckkkccck. ...kcccck... kcccccccccck .kck...kck.. ck..kcck..kc .kcccccccck. .kcckkkkcck. ....kcck.... .kccccccck..',
+'kcccck...... ccckccckcccc .kcckcckcck. .kcckccccck. ...kcccck... kcccccccccck kkck...kck.. ck..kck...kc ..kcccccck.. .kccckkccck. ....kcck.... .kkccccckk..',
+'kcccck...... ccckccckcccc ..kk.kk.kk.. .kcckkkccck. ...kcccck... kcccccccccck ggk.....kck. kgk.kcgk.kgk ..kcccccck.. ..kccccccgk. ...kkcckk... ...kcccck...',
+'.kcck....... kcckccckkcck ............ kcccccccccck ....kckk.... kcccccccccck ggk..kk.kggk kck.kcck.kck ...kcccck... ..kcccccck.. ..kggccggk.. ....kccck...',
+'..kk........ .kk.kcck.kk. ............ .kkkkkkkkkk. ....kck..... .kkkkkkkkkk. kk..kggkkggk kck..kck.kck ....kkkk.... ...kcccck... ...kkkkkk... ....kcck....',
+'............ .....kk..... ............ ............ .....k...... ............ ....kggk.kk. .k....k...k. ............ ....kkkk.... ............ .....kk.....',
+],
+[ // Glacia
+'............ ............ ............ ............ ............ ............ ............ ............ ............ ............ ............ ..kck..kck..',
+'......k..... kkkkkkkkkkkk ..k...k..k.. .....k...... ............ ....k.....k. ............ ...k....k... .........kk. ............ .....kk..... ..kckk.kck..',
+'.....kgk.... gggggggggggg .kgk.kgkkgk. ....kgk..... .....kk..... ...kgk...kgk ............ ..kck..kck.. ........kggk .......k.... .k..kggk.... ..kckckkck..',
+'...k..k..... kckcckckcccc .kck.kckkck. ....kck..... .k..kcck.... ..kgggk..kgk ....kkk..... ..kck..kck.. ........kcck ......kgk... kgk.kcck.k.. ..kckcckck..',
+'..kgk....k.. kckcckckcccc .kckkgckkck. ....kckk.... kgkkcccck... ..kgkggkkgk. ...kgggk.... ..kck..kck.. ........kcck ......kggk.. kckkgccgkgk. ..kckcckck..',
+'...k....kgk. kckcckckcccc kgckkckkgck. ...kkckgk... .kkcckkcck.. .kgk.kgkkgk. ..kgcccgk... ..kggkkggk.. ..k..k..kcck .....kggggk. kcgkcccckck. ..kcccccck..',
+'.........k.. kckcckckcccc kckkgckkck.. ..kgkkkck... ..kckkckck.. kggk..kggk.. ..kckkkcgk.. ..kggkkggk.. .kgkkgkkgcck .....kggggk. kccgccccgck. ..kcccccck..',
+'.k..k..k..k. kckcckckcckk kckkck.kck.. ..kckckck... .kcckkckcck. kgk...kgk... .kgkkkkkck.. ...kckkck... .kckkckkccck ....kggggk.. kccccccccck. .kcccccccck.',
+'kckkckkckkck kckcckckcck. kckkck.kck.. ..kckckckk.. .kcckkckkck. .k.....k.... .kckgggkck.. ..k.kcck.k.. .kckkckkccck ....kggggk.. kcccccccccgk .kcccccccck.',
+'kckkckkckkck kckcckckcck. kckkcgkkck.. .kkckckkkgk. .kccccckkck. ...kkkkkk... .kckccckck.. .kgkkggkkgk. kgckgckgccck ...kkgggk... kcccccccccck .kcccccccck.',
+'kcgkckgckgck kckcckckcck. kcgkkckkcgk. kgkkkckckck. .kckcggkkck. ..kggggggk.. .kckcggkck.. kcgccggccgck kccgccgcccck ..kggkgk.... kcccccccccck .kcggccggck.',
+'kcggckkckggk kckkkkckkk.. .kckkcgkkck. kckckckckck. .kckkggckck. ...kcccck... .kckcggkckk. kcgccggccgck kcccccccccck ..kggggk.... .kggkggkggk. .kcccccccck.',
+'kckgckkckkgk kck..kck.... .kck.kckkck. kckckckckck. .kckkccccck. ..kckcckck.. .kckckkkckgk .kgkkggkkgk. kcccccccccck .kggggk..... .kggkggkggk. .kcccccccck.',
+'kcccccccccck .k...kck.... .kck.kckkck. kckckckckk.. .kckkckkcck. ..kckcckck.. .kckckkkckck ..k.kcck.k.. kckkccckkcck .kkgggkkkkk. ..kkkggkkk.. .kcccccccck.',
+'kcccccccccck .....kck.... .kckkgckkck. .kkckckckck. .kcckckkcck. ..kcckkcck.. .kckcgggkkck ...kckkck... kckkccckkcck kcccgcccccck .....kk..... .kcccccccck.',
+'kckkckkckkck ......k..... kgckkckkgck. kckckckckck. .kkckckkckk. ..kcckkcck.. .kckkccckkck ..kggkkggk.. kcccccccccck kcccccccccck ............ .kccckkccck.',
+'kckkckkckkck ............ kckkgckkck.. kckckckckck. kgkcckkcckgk ..kckcckck.. .kcgkkkkkgk. ..kggkkggk.. kcccccccccck kcccccccccck ............ ..kcccccck..',
+'kckkckkckkck ............ kckkck.kck.. kckckckckck. kgkkcccckkgk ..kckcckck.. ..kcgkkkgck. ..kck..kck.. kcccccccccck kcccccccccck ............ ..kcccccck..',
+'kckkckkckkck ............ kckkck.kck.. kckckckckckk .kk.kcck..kk ...kcccck... ...kcgggck.. ..kck..kck.. kcccccccccck kcccccccccck ............ ..kcccccck..',
+'.k..k..k..k. ............ .k..k...k... gcgcgcgcgcgg .kgk.kk...kg ....kkkk.... ....kccck... ..kck..kck.. .kgkkgkkgkk. .kkkkkkkkkk. ............ ..kcccccck..',
+'............ ............ ............ kkkkkkkkkkkk .kgk......kg ............ .....kkk.... ...k....k... .kgkkgkkgk.. ............ ............ ...kkkkkk...',
+],
+[ // Tethys
+'............ ............ ............ ............ ............ ..kck.kck..k .k.......... ............ ............ ............ ............ .kgk.kk.kgk.',
+'............ kk...kk...kk ......kkkkk. ............ ............ kkccckccckkc kgk......... ............ ............ ............ .kkkkkkkkkk. .kckkggkkck.',
+'............ cck.kcck.kcc .kkkkkgggggk .......k.... ............ cckkccckkcck kcgk........ ............ kkkkk....... ............ kggggggggggk .kckkcckkck.',
+'............ cck.kcck.kcc kggggkgggggk ......kgk... ............ kck.kck..kck kcck........ ........k... ccccck...... ...k........ kcccccccccck .kckkcckkck.',
+'........k... cck.kggk.kcc kggggkkkkkk. ......kgk... ............ .k...k....k. kcckk....... ...kkkkkgk.. cccccgk..... .kkgk....... kcckkkkkkcck .kckkcckkck.',
+'.......kgk.. cck.kggk.kcc .kkkk....... ......kgk... ............ ....kkkk.... kcckgk...... ..kggggkcgk. cccccgk..... kgkgk..k.... kcck....kcck .kckkcckkck.',
+'......kgcgk. cck.kggk.kcc ...kkkkk.... .....kgggk.. ............ ...kggggk... .kkkcgk..... .kgccccgcck. cccccck..... kgkckkkgk... kcck.k..kcck .kckkcckkck.',
+'.....kgcccgk cck.kggk.kcc ..kgggggkkk. .....kgggk.. ..........k. ...kgkkgk... ...kcck..... kgckkkkcck.. cccccck..... .kcckgggk... kcckkgk.kcck .kckkcckkck.',
+'.....kccccck cck.kggk.kcc ..kggggggggk ....kkkgk... ..kk..k..kgk ....kggk.... ...kcckk.... .kk....kk... ccccccgkkkkk .kcckggckk.. kcckgcgkkcck .kcggccggck.',
+'.....kcckcck cck.kkkk.kcc ...kkkkkgggk ...kggggk... .kggkkgkkgk. .....kk..... ...kcckgk... ............ ccccccgkkkkk .kccckccggk. kcckckkgkcck .kcccccccck.',
+'.....kck.kck cckkgkkgkkcc ........kkk. ..kgcccggk.. .kcckkckkck. ............ ..k.kkkcgk.. ............ cccccckkkkkk ..kcckccggk. kccgkgkckcck ..kkkcckkk..',
+'.kkkkkck.kck cckkgkkgkkcc ..kk....kk.. .kgcckkccgk. .kcckgcgkcck ...kk..kk... .kgk..kccgk. ............ cccccckkkkkk ..kcckkcck.. kccckcgckcck ....kcck....',
+'kgggggck.kck cckkgkkgkkcc .kcck..kcck. kgcck..kccgk .kcckccckck. ..kcckkcck.. .kcgk.kccgk. ............ cccccckkkkkk ..kck.kcck.. kccckkkckcck ....kcck....',
+'kgggggck.kck cckkgkkgkkcc kcccckkcccck kcck....kcck ..kkkckckck. ..kcckkcck.. .kcck.kcckk. ........k... cccccckkkkkk ..kck.kck... kccckgkckcck ....kcck....',
+'kccccck..kck cckkgkkgkkcc kckkcccckkck kcck....kcck ....kckckck. ...kcccck... .kcck..kkkgk ...kkkkkgk.. cccccckkkkkk ..kck.kck... kccckcgkgcck ....kcck....',
+'kccccck..kck cck.k..k.kcc kck.kcckk.k. kck......kck kkkkkckckckk ....kcck.... .kcck...kgcg ..kggggkcgk. cccccckkkkkk ..kck.kck... kcckgkkkccck ....kcck....',
+'kccccck..kck cckk....kkcc kcck.kkcck.. kckkkkkkkkck gggggcgcgcgg ....kcck.... ..kk....kccc .kgccccgcck. cccccckkkkkk ..kck.kck... kcckcgggkcck ....kcck....',
+'kccccck..kck cckgk..kgkcc kccckkcccck. gcggggggggcg cccccccccccc ....kcck.... .........kck kgckkkkcck.. cccccckkkkkk .kkckkkckkk. kcckkccckcck ....kcck....',
+'kccccck...k. cckgk..kgkcc .kkcccckkcck kkkkkkkkkkkk cccccccccccc ...kkcckk... ..........k. .kk....kk... ccccccckkkkk kcccccccccck kcck.kkkkcck ....kcck....',
+'.kkkkk...... cckgk..kgkcc ...kcck..kck ............ kkkkkkkkkkkk ..kcccccck.. ............ ............ ccccccckkkkk .kkkkkkkkkk. .kk......kk. ....kcck....',
+'............ kk.k....k.kk ....kk....k. ............ ............ ...kkkkkk... ............ ............ kkkkkkk..... ............ ............ .....kk.....',
+],
+[ // Amethyst
+'............ ............ .....k...... ....kkkk.... ............ ............ ............ ............ ............ ............ ............ ...kgkkgk...',
+'..kkkkkkkk.. ............ ....kgk..... ..kkggggkk.. ....kkkk.... ............ ............ ............ ....kkkk.... ............ .kkkkkkkkkk. ...kgkkgk...',
+'.kcccccccck. ............ .kkkgcgkkk.. .kgggkkgggk. ...kcccck... ....kkkk.... .kkkkkkkkk.. ............ ...kggggk... ............ kggggggggggk ...kgkkgk...',
+'.kcccccccck. .....kk..... kgggcccgggk. ..kkggggkk.. ..kcccccck.. ...kggggk... kccccccccck. ............ ..kggggggk.. ............ kcccccccccck ...kgkkgk...',
+'.kcccccccck. ....kcck.... kcccccccccgk ...kkkkk.... ..kcccccck.. ..kgccccgk.. .kccccckcck. ............ ..kgccccgk.. .....k...... kckkkkkkkkck ...kgkkgk...',
+'.kccgkkkcck. ....kcck.... kccccccccccg ..kcck...... .kccckkccck. .kgcckkccgk. .kccccckcck. ............ .kgccccccgk. ....kck..... kckkkkkkkkck ...kggggk...',
+'.kccgkkkcck. ....kcck.... kccccccccccc ..kcck.k.... .kcckkkkcck. kgcck..kccgk kckccccccck. ...k....k... .kgccccccgk. ...kccck.... kckcccccccck ..kkggggkk..',
+'.kccgkkkcck. .kk.kcck.... kccccccccccc ..kcckkck... kcckkkgkkcck kcck....kcck kcckccccckk. ..kgk..kgk.. kgcckkkkccgk ..kckccck... kckckkkkkkck .kggggggggk.',
+'.kccgkkkcck. kcckkcck.... kccckckccccc ..kgckkck... kcckkkgkkcck kcckkkkkkcck kccckckckk.. ..kck..kck.. kgcckkkkccgk ..kcckkck... kckckkkkkkck .kggggggggk.',
+'.kccgkkkcck. kcckkcck.kk. .kkkkk.kkkck ..kgckkck... kcckgkgkkcck kccggggggcck kccckckkcck. ..kck..kck.. kgcckkkkccgk .kcccgkcck.k kckcccccckck ..kkcccckk..',
+'.kccgkkkcck. kcckkcckkcck ...kgk..kgk. ..kgckkck... kcckgkgkkcck .kkkkkkkkkk. kccccggccck. ..kckkkkck.. kgcckggkccgk .kcccgkcckkc kckckkkkckck ...kcccck...',
+'.kccgkkkcck. kcckkcckkcck ...kgk..kgk. ..kgckcck... kcckgkgkkcck .....k...... kccckggccck. ..kckggkck.. kgcckggkccgk .kccckkcckkc kckckkkkckck ..kcccccck..',
+'.kccgkkkcck. kcckkcckkcck .k.kgkk.kgk. ..kgckcck... kcckgkgkkcck ....kgk..... kcckkkkccck. ..kckcckck.. kgcckkkkccgk .kccckkcckkc kckcccccckck ..kcccccck..',
+'.kccgkkkcck. kcckkcckkcck kgk.kkgk.k.. ..kgckcck... kcckgkgggcck ...kgggk.... .kkcckcccck. ..kckcckck.. kgcckkkkccgk .kckckkck.kc kckcckkkckck ..kckkkkck..',
+'.kccgkkkcck. kcckkcckkcck kgk..kgk.... ..kgckcck... kcckgkgggcck ...kgkgkk... .kccccckcck. .kkckcckckk. kgcckkkkccgk .kckkcck.kck kckcckkkckck ..kckkkkck..',
+'.kccgkkkcck. kcckkcckkcck kgkk.kgkk... ..kgckcck... .kccgkgkcck. ...kgkgkgk.. kcccccckcck. kgkcgccgckgk .kgccccccgk. .kck.kk..kck kckcccccckck ..kcccccck..',
+'.kccgkkkcck. kkkkkkkkkkkk .kkgk.kkgk.. ..kgckcck... .kccckkccck. ...kgkkkk... kccckccccck. kckcccccckck .kgccccccgk. ..kck...kcck kckkkkkkckck ..kcccccck..',
+'.kccgkkkcck. gggggggggggg ..kgk..kgk.. ..kgckcck... ..kcccccck.. ...kggkgk... kccckccckck. kckcccccckck ..kgccccgk.. ..kcckkkkck. kckkkkkkckck ...kcccck...',
+'.kccgkkkcck. gggggggggggg ..kgk..kgk.. ..kcckcck... ..kcccccck.. ....kggk.... kccccccckck. kcgccccccgck ..kggggggk.. ...kccccck.. kcccccccccck ...kcccck...',
+'..kgggggkk.. gggggggggggg ...k....k... ...kk.kk.... ...kcccck... .....kk..... .kkkkkkk.k.. .kkkkkkkkkk. ...kggggk... ....kccck... kcccccccccck ....kcck....',
+'.kgggggggk.. gggggggggggg ............ ............ ....kkkk.... ............ ............ ............ ....kkkk.... .....kkk.... .kkkkkkkkkk. .....kk.....',
+],
+[ // Rust
+'............ ............ ............ ............ ............ ............ ............ ......k..... ............ ............ ............ ............',
+'............ .......kkkk. ............ ............ ......kkk... ............ ............ .....kgk.... ............ ............ ............ ............',
+'....k....... ...k..kggggk ............ ............ ....kkkkkk.. ............ .kkkkkkkkkk. .k....k..... ............ ............ ..k.....kk.. ..kkkkkkkk..',
+'...kck...... ..kgk.kggggk ...kk....... ............ ...kckkkkk.. .....kk..... kggggggggggk kgk......... ............ kkk......kk. .kgk...kggk. .kggggggggk.',
+'..kcck...... ..kcgk.kkkk. ..kggk...... ............ ..kcckkkkk.. ....kggk.... kcccccccccck .k...k....k. .kkkkkkkkkk. cggk....kcck .kggk.kggggk .kcccccccck.',
+'.kccckkk.... .kgccgk..... ..kggk...... ............ .kcggkkkkkk. ..k.kcck.... kcccccccccck ....kgk..kgk kggggggggggk cggk....kcck ..kgk.kgckgk .kcccccccck.',
+'.kcccgggkk.. kgkkcck..... .kkkkkkkk.k. .....kk..... .kcggkkkkkk. .kgkkcck.k.. kcckkkkkkcck ...kgcgk..k. kcccccccccck ccck....kcck ...kckkck.k. .kcccccccck.',
+'.kccgkkgggk. kckkkck..... kccckcccckck ..kkkggkkk.. .kcggkkkkkk. .kckkcckkgk. kcckkkkkkcck ..kgkkkgk... kcccccccccck ccck...kkcck ...kckkck... .kcccccccck.',
+'kggkkkkkkggk kccckk...... kccckcccckck .kgggccgggk. .kcggkkkkkk. kgcgkcckkck. kcckggggkcck ..kck.kck... kcccccggccck cccgk.kcgcck ....kcck.... ..kkkkkkkk..',
+'kgk.kcck.kgk kcccck...... .kkk.kkkk.k. .kcccccccck. .kcckkkkkkk. kccckcckgcgk kcckcccckcck .kgk...k.... kcggccggccgk cccgk.kcgcck ....kcck.... ..kkkkkkkk..',
+'kgk.kcck.kgk kcccck..k... ............ .kcckcckcck. .kcckkkkkkk. kckckcckckck kcckkcckkcck .kck.k.k.... kgggcggcgggk cccck.kcccck ....kcck.... .kcccccccck.',
+'kgk.kcck.kgk .kkkk..kgk.. ......kk.... .kcckcckcck. .kcckkkkkkk. kckckcckckck kcckkcgkkcck .kckkgkgk.k. kgccggccggck cccckkkcccck ....kcck.... .kcccccccck.',
+'kgk.kcck.kgk .......kcgk. .....kggk... kgkkkkkkkkgk .kcckkkkkkk. kckckcckckck kcck.kgkkcck .kckkckckkgk kcccggccccck ccccccccccck ...kckkck... ..kcccccck..',
+'kggkkcckkggk ......kgccgk .....kggk... gggggggggggg .kckckkkkk.. kckckcckckck kcck.kgkkcck .kckkcgckkck kcccccccccck ccccccccccck ...kckkck... ..kcccccck..',
+'.kgggccccck. kkkk.kgckcck .kkk.kkkk.k. cgccccccccgc .kckckkkkk.. kccckcckccck kcck.kgkkcck .kck.kkk.kck kcccccccccck ccccccccccck ..kck..kck.. ...kcccck...',
+'..kkggcccck. ggggkkcckcck kccckcccckck kgkkkkkkkkgk .kccckkkkk.. kccckcckccck kcck.kgkkcck ..kgk...kgck kcccccccccck ccccccccccck ..kck..kck.. ...kcccck...',
+'....kkkccck. ggggkkccckk. kccckcccckck .k........k. .kcccckkkck. kccckcckccck kcck.kgkkcck ..kck...kck. kcccccccccck ccccccccccck .kck....kck. ...kcccck...',
+'.......kkk.. kkkk..kcck.. .kkk.kkkk.k. ............ ..kcccccck.. kcccgccgccck kcck.kgkkcck ...kgkkkgck. .kkkkkkkkkk. ccccccccccck .kck....kck. ....kcck....',
+'............ ......kccck. ............ ............ ...kcccck... kcccccccccck kcck..k.kcck .k.kcgggckk. ............ ccccccccccck ..k......k.. ....kcck....',
+'............ .......kkk.. ............ ............ ....kcck.... .kkkkkkkkkk. .kk......kk. kgk.kkkkkkgk ............ kkkkkkkkkkk. ............ .....kk.....',
+'............ ............ ............ ............ .....kk..... ............ ............ .k........k. ............ ............ ............ ............',
+],
+];
+// MAPICON-END
 const NODE={
   assault: {name:'Assault',  icon:181,c:14,desc:'Enemy waves. Clear them to move on.'},
   asteroids:{name:'Asteroid field',icon:76,c:12,desc:'Dense rocks drifting through. Watch your shields.'},
@@ -2073,7 +2239,7 @@ const NEWT={rivet:['rivet drones',2,16,5,8],drill:['drills',2,18,3,10],crab:['sc
   flare:['flares',2,18,3,7],magma:['magma blobs',4,26,6,2,'burst'],phoenix:['phoenixes',3,22,4,8]};
 const NEW_BY_PLANET=[['flare','magma','phoenix'],['coin','sentinel','orrery'],['moth','spore','beetle'],['flake','icicle','frostorb'],['jelly','eel','angler'],['prism','shardling','geode'],['rivet','drill','crab']];
 const SEA_TYPE=['magma','coin','spore','icicle','eel','shardling','crab'];
-let CAPF=[],OPTF=[],GEMF=[],BOMBF=[];
+let CAPF=[],OPTF=[],GEMF=[],BOMBF=[],MAPICONF=[];
 function genSprites(){
   let nb=256;
   const frames=(fn,n=6,sty=true)=>{const out=[];for(let k=0;k<n;k++){const P=painter();fn(P,k/n);if(sty)P.stylize();P.write(nb);out.push(nb++);}return out;};
@@ -2098,6 +2264,8 @@ function genSprites(){
     else{const s=px?pixSeq(px):{fr:frames(DESIGNS[id]),ov:null}; ETYPES[id]={name,hp,val,an,c,beh,fr:s.fr,ov:s.ov,made:true};}}
   CAPF=frames(DESIGNS.cap,2,false); OPTF=frames(DESIGNS.opt,4,false); GEMF=frames(DESIGNS.gem,4,false); BOMBF=frames(DESIGNS.bombpk,2,false);
   NODE.cache.icon=GEMF[0]; NODE.cache.c=7;
+  // route-map icons: one sprite per area
+  MAPICONF=MAPICON.map(rows=>{const n=rows[0].split(' ').length, out=[]; for(let k=0;k<n;k++){const P=painter(); pixFill(P,rows.map(l=>l.split(' ')[k])); P.write(nb); out.push(nb++);} return out;});
   // whole asteroids that tumble, kept a pixel clear of every sprite edge so none look cut off
   ROCKSETS=[];
   for(let k=0;k<6;k++){const big=true, R=k<3?[10.6,9.4]:[10.4,9.25], s=[k*1.7+0.3+(k===4?0.9:0),k*2.9+1.1,k*0.7+2.3];
@@ -2245,9 +2413,8 @@ ST.hub={
     for(const b of bs){
       if(!sunDrawn&&b.depth>CY){drawSun(this.t);sunDrawn=true;}
       if(b.station)drawStation(b.x,b.y,this.t); else {drawMoons(b,this.t/60,false); drawPlanet(b.pi,b.x,b.y,b.r); drawMoons(b,this.t/60,true);}
-      if(b.station){ if(allQuests().some(x=>x.s.st==='done')&&((this.t/15|0)%2))txt('!',b.x,b.y-b.r-11,7,8,'center'); }
-      else if(tooDangerous(b.pi)){ if((this.t/20|0)%3)drawWarn(b.x,b.y-b.r-13); }         // too dangerous: a hazard sign
-      else if(allQuests().some(x=>x.pi===b.pi&&x.s.st==='active')&&((this.t/15|0)%2))txtO('!',b.x,b.y-b.r-19,7,14,'center');   // a quest here, and in range
+      if(b.station){ if(allQuests().some(x=>x.s.st==='done'))txt('!',b.x,b.y-b.r-11,7,8,'center'); }
+      else if(!tooDangerous(b.pi)&&allQuests().some(x=>x.pi===b.pi&&x.s.st==='active'))txtO('!',b.x,b.y-b.r-19,7,14,'center');   // a quest here, and in range
     }
     if(!sunDrawn)drawSun(this.t);
     const sh=this.ship; spr(shipFrame(this.t),sh.x,sh.y,14,{flip:sh.flip});
@@ -2387,7 +2554,7 @@ ST.map={
       const bc=sel?((this.t/8|0)%2?7:1):avail?7:done?5:11;
       frame(x-14,y-12,28,25,bc,0);
       if(avail)hit(x-16,y-14,32,29,()=>{const i=ch.indexOf(n); if(this.sel===i)KP.Enter=true; else {this.sel=i;SND.sfx('sel');}});
-      ctx.globalAlpha=(avail||done)?1:0.45; spr(N.icon,x,y,done?11:N.c,{mc1:done?12:15}); ctx.globalAlpha=1;
+      ctx.globalAlpha=(avail||done)?1:0.45; spr((MAPICONF[this.pi]||[])[n.id]??N.icon,x,y,done?11:N.c,{mc1:done?12:15}); ctx.globalAlpha=1;
       if(seen&&!done)rect(x+10,y+9,2,2,5);
       if(questsOnNode(this.pi,n.id).length&&((this.t/15|0)%2))txt('!',x+12,y-19,7,8,'center');
       if(run.pos===n.id)spr(shipFrame(this.t),x,y-23,14);
@@ -2475,8 +2642,6 @@ function shipPower(){
 const THREAT=[10,14,19,26,36,50,69];   // by planet difficulty 1-7 (Rust .. Ignis)
 function planetThreat(pi){return Math.round(THREAT[PLANETS[pi].diff-1]*(1+0.6*(G.ngp||0)));}
 const tooDangerous=pi=>shipPower()<planetThreat(pi)*0.8;   // the red zone: expect a beating
-// a red hazard triangle with a black '!'
-function drawWarn(x,y){for(let i=0;i<7;i++)rect(x-i,y+i,2*i+1,1,i===6?2:10); rect(x,y+2,1,2,0); rect(x,y+5,1,1,0);}
 // the ship power a shop item would give (buy it on a copy of the save, then put everything back)
 const BUYF=['power','engine','shield','bombsMax','ships','weapon','spreadLv','laserLv','homingLv','waveLv'];
 function powerAfter(s){const wep={...G.wep}, keep={}; for(const k of BUYF)keep[k]=G[k]; s.buy(); const v=shipPower();
