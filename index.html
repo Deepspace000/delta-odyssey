@@ -21,13 +21,15 @@ html,body{height:100%;margin:0;background:var(--void);overflow:hidden;touch-acti
 .tbtn{position:fixed;display:none;z-index:4;font:inherit;font-size:13px;line-height:1;color:#fff;background:rgba(64,49,141,.45);border:2px solid rgba(120,105,196,.8);padding:0;border-radius:0;touch-action:none}
 .tbtn.down{background:rgba(120,105,196,.85)}
 .tbtn.lit{border-color:#bfce72;color:#bfce72}
-body.touch[data-mode=level] #tb-wpn,body.touch[data-mode=level] #tb-pw,body.touch[data-mode=level] #tb-sh,body.touch[data-mode=level] #tb-bomb,body.touch[data-mode=level] #tb-pause,
+body.touch[data-mode=level] #tb-wpn,body.touch[data-mode=level] #tb-pw,body.touch[data-mode=level] #tb-sh,body.touch[data-mode=level] #tb-psh,body.touch[data-mode=level] #tb-bomb,body.touch[data-mode=level] #tb-pause,
 body.touch[data-mode=level] #tb-auto,body.touch[data-mode=levelmenu] #tb-auto,body.touch[data-mode=menu] #tb-back{display:block}
 #tb-wpn,#tb-bomb{width:64px;height:64px;border-radius:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px)}
 #tb-bomb{right:calc(env(safe-area-inset-right,0px) + 18px)}
 #tb-wpn{right:calc(env(safe-area-inset-right,0px) + 94px)}
 #tb-sh{width:64px;height:64px;border-radius:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);right:calc(env(safe-area-inset-right,0px) + 170px);border-color:#67b6bd;color:#67b6bd;font-size:12px}
 #tb-pw{width:64px;height:64px;border-radius:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 18px);right:calc(env(safe-area-inset-right,0px) + 170px);border-color:#bfce72;color:#bfce72}
+#tb-psh{width:64px;height:64px;border-radius:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 96px);right:calc(env(safe-area-inset-right,0px) + 18px);border-color:#94e089;color:#94e089;font-size:11px}
+#tb-psh.lit{background:rgba(85,160,73,.8);border-color:#fff;color:#fff}
 #tb-pause{top:calc(env(safe-area-inset-top,0px) + 30px);right:calc(env(safe-area-inset-right,0px) + 14px);width:54px;height:36px}
 #tb-auto{top:calc(env(safe-area-inset-top,0px) + 30px);left:calc(env(safe-area-inset-left,0px) + 14px);height:36px;padding:0 12px}
 #tb-back{top:calc(env(safe-area-inset-top,0px) + 12px);left:calc(env(safe-area-inset-left,0px) + 12px);height:36px;padding:0 14px}
@@ -113,20 +115,21 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
   <button class="tbtn" id="tb-bomb">Bomb</button>
   <button class="tbtn" id="tb-pw">Power</button>
   <button class="tbtn" id="tb-sh">Shift</button>
+  <button class="tbtn" id="tb-psh">Power shield</button>
   <button class="tbtn" id="tb-back">Back</button>
 </div>
 <button class="tbtn" id="installBtn">Install app</button>
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.05</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.06</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
     <button id="resume" hidden>Use saved disk</button>
   </div>
   <p id="msg"></p>
-  <p class="keys">Touch: drag anywhere on the screen to fly. Tap to choose. Buttons for auto fire, weapon and bomb appear in levels.<br>Player 1: arrows, Z or Space fire, X switch weapon, C bomb, V take power-up, B shift points between speed and twin shot.<br>Player 2: WASD, F fire, G switch weapon, H bomb, J take power-up, K shift. Gamepads work too.<br>Esc pauses. M turns music on or off.</p>
+  <p class="keys">Touch: drag anywhere on the screen to fly. Tap to choose. Buttons for auto fire, weapon, bomb and power shield appear in levels.<br>Player 1: arrows, Z or Space fire, X switch weapon, C bomb, V take power-up, B shift points between speed and twin shot, N power shield.<br>Player 2: WASD, F fire, G switch weapon, H bomb, J take power-up, K shift, L power shield. Gamepads work too.<br>Esc pauses. M turns music on or off.</p>
   <div class="row"><button class="plain" id="forget">Forget saved disk</button></div>
 </div></div>
 <script>
@@ -660,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.05';
+const VERSION='2.06';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -733,30 +736,30 @@ addEventListener('keydown',e=>{ if(e.target&&e.target.tagName==='INPUT')return; 
 addEventListener('keyup',e=>{K[e.code]=false;});
 addEventListener('blur',()=>{for(const k in K)K[k]=false;});
 const KEYMAP=[
-  {up:['ArrowUp'],down:['ArrowDown'],left:['ArrowLeft'],right:['ArrowRight'],fire:['Space','KeyZ'],sw:['KeyX'],bomb:['KeyC'],pw:['KeyV'],sh:['KeyB']},
-  {up:['KeyW'],down:['KeyS'],left:['KeyA'],right:['KeyD'],fire:['KeyF'],sw:['KeyG'],bomb:['KeyH'],pw:['KeyJ'],sh:['KeyK']}];
+  {up:['ArrowUp'],down:['ArrowDown'],left:['ArrowLeft'],right:['ArrowRight'],fire:['Space','KeyZ'],sw:['KeyX'],bomb:['KeyC'],pw:['KeyV'],sh:['KeyB'],psh:['KeyN']},
+  {up:['KeyW'],down:['KeyS'],left:['KeyA'],right:['KeyD'],fire:['KeyF'],sw:['KeyG'],bomb:['KeyH'],pw:['KeyJ'],sh:['KeyK'],psh:['KeyL']}];
 const ctlPrev=[{},{}]; const CT=[{},{}];
 // touch: the whole screen moves the ship (relative drag), plus a few buttons
-const TOUCH={on:false,autoFire:true,drag:[{dx:0,dy:0,down:false},{dx:0,dy:0,down:false}],ptrs:new Map(),hits:[],sw:[false,false],bomb:[false,false],pw:[false,false],sh:[false,false]};
+const TOUCH={on:false,autoFire:true,drag:[{dx:0,dy:0,down:false},{dx:0,dy:0,down:false}],ptrs:new Map(),hits:[],sw:[false,false],bomb:[false,false],pw:[false,false],sh:[false,false],psh:[false,false]};
 function hit(x,y,w,h,fn){TOUCH.hits.push({x,y,w,h,fn});}
 const OKW=()=>TOUCH.on?'Tap':'Fire';
 const SHIPF=[169,170,171,172,173,174,175];
 const shipFrame=t=>SHIPF[((t/4)|0)%SHIPF.length];
 // standard gamepad buttons: 0 A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 LT, 7 RT, 8 View, 9 Menu, 12-15 d-pad.
 // The controller legend under the game is built from this table, so it always matches.
-const PAD={fire:[0,7,5],sw:[2],bomb:[1,6],pw:[3],sh:[4,8],start:[9],back:[1]};
+const PAD={fire:[0,7],sw:[2],bomb:[1,6],pw:[3],sh:[4,8],psh:[5],start:[9],back:[1]};
 const PADNAME=['A','B','X','Y','LB','RB','LT','RT','View','Menu'];
 let PADON=false;
 function readPad(i){
   const ps=navigator.getGamepads?navigator.getGamepads():null; const p=ps&&ps[i]; if(!p)return null;
   const b=j=>!!(p.buttons[j]&&p.buttons[j].pressed), on=a=>a.some(b); const ax=j=>Math.abs(p.axes[j]||0)>0.35?p.axes[j]:0;
-  return {x:ax(0)+(b(15)?1:0)-(b(14)?1:0), y:ax(1)+(b(13)?1:0)-(b(12)?1:0), fire:on(PAD.fire), sw:on(PAD.sw), bomb:on(PAD.bomb), pw:on(PAD.pw), sh:on(PAD.sh), start:on(PAD.start), back:on(PAD.back)};
+  return {x:ax(0)+(b(15)?1:0)-(b(14)?1:0), y:ax(1)+(b(13)?1:0)-(b(12)?1:0), fire:on(PAD.fire), sw:on(PAD.sw), bomb:on(PAD.bomb), pw:on(PAD.pw), sh:on(PAD.sh), psh:on(PAD.psh), start:on(PAD.start), back:on(PAD.back)};
 }
 (function(){ // the legend: first button of each action (two for fire), gameplay row in levels, menu row elsewhere
   const key=j=>`<b class="k${j}${j<4?' pf':''}">${PADNAME[j]}</b>`, it=(k,t)=>`<span>${k}${t}</span>`;
   const act=(a,t,n=1)=>it(PAD[a].slice(0,n).map(key).join(''),t), stick=t=>it('<b>Stick</b>',t);
   document.getElementById('padkeys').innerHTML=
-    '<div class="lv">'+stick('Fly')+act('fire','Fire',2)+act('sw','Switch weapon')+act('pw','Take power-up')+act('sh','Shift speed/twin')+act('bomb','Bomb')+act('start','Pause')+'</div>'+
+    '<div class="lv">'+stick('Fly')+act('fire','Fire',2)+act('sw','Switch weapon')+act('pw','Take power-up')+act('sh','Shift speed/twin')+act('psh','Power shield')+act('bomb','Bomb')+act('start','Pause')+'</div>'+
     '<div class="mn">'+stick('Move')+act('fire','Choose')+act('back','Back')+'</div>';
 })();
 function pollInput(){
@@ -764,12 +767,12 @@ function pollInput(){
   for(let i=0;i<2;i++){
     const m=KEYMAP[i], any=a=>a.some(k=>K[k]);
     let x=(any(m.right)?1:0)-(any(m.left)?1:0), y=(any(m.down)?1:0)-(any(m.up)?1:0);
-    let fire=any(m.fire), sw=any(m.sw), bomb=any(m.bomb), pw=any(m.pw), sh=any(m.sh), start=false, back=false;
-    const p=readPad(i); if(p){seen=true;x+=p.x;y+=p.y;fire=fire||p.fire;sw=sw||p.sw;bomb=bomb||p.bomb;pw=pw||p.pw;sh=sh||p.sh;start=p.start;back=p.back;}
+    let fire=any(m.fire), sw=any(m.sw), bomb=any(m.bomb), pw=any(m.pw), sh=any(m.sh), psh=any(m.psh), start=false, back=false;
+    const p=readPad(i); if(p){seen=true;x+=p.x;y+=p.y;fire=fire||p.fire;sw=sw||p.sw;bomb=bomb||p.bomb;pw=pw||p.pw;sh=sh||p.sh;psh=psh||p.psh;start=p.start;back=p.back;}
     x=clamp(x,-1,1);y=clamp(y,-1,1);
-    const c={x,y,fire,sw,bomb,pw,sh,start,back,up:y<-0.5,down:y>0.5,left:x<-0.5,right:x>0.5}, pv=ctlPrev[i];
-    for(const k of ['fire','sw','bomb','pw','sh','start','back','up','down','left','right'])c[k+'P']=c[k]&&!pv[k];
-    if(TOUCH.pw[i]){c.pwP=true;TOUCH.pw[i]=false;} if(TOUCH.sh[i]){c.shP=true;TOUCH.sh[i]=false;}
+    const c={x,y,fire,sw,bomb,pw,sh,psh,start,back,up:y<-0.5,down:y>0.5,left:x<-0.5,right:x>0.5}, pv=ctlPrev[i];
+    for(const k of ['fire','sw','bomb','pw','sh','psh','start','back','up','down','left','right'])c[k+'P']=c[k]&&!pv[k];
+    if(TOUCH.pw[i]){c.pwP=true;TOUCH.pw[i]=false;} if(TOUCH.sh[i]){c.shP=true;TOUCH.sh[i]=false;} if(TOUCH.psh[i]){c.pshP=true;TOUCH.psh[i]=false;}
     if(TOUCH.sw[i]){c.swP=true;TOUCH.sw[i]=false;} if(TOUCH.bomb[i]){c.bombP=true;TOUCH.bomb[i]=false;}
     CT[i]=c; ctlPrev[i]=c;
   }
@@ -1533,7 +1536,7 @@ const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[
 let LV=null;
 
 function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:Math.max(0,ownedWeapons().indexOf(G.weapon||'pulse')),alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
-  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),hist:[],field:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0,wx:40,wy:100,whp:0,winv:0,wcool:0};}
+  bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),hist:[],field:0,psh:0,pshD:0,pshCool:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0,wx:40,wy:100,whp:0,winv:0,wcool:0};}
 function laserLv(){return G.laserLv||(G.wep.laser?1:0);}
 function spreadLv(){return G.spreadLv||(G.wep.spread?1:0);}
 function ownedWeapons(){return WEAPONS.filter(w=>G.wep[w]);}
@@ -1811,6 +1814,22 @@ function shiftPoint(p){
   if(p.shDir>0){p.pw.speed--; p.pw.twin++; swap('speed','twin');} else {p.pw.twin--; p.pw.speed++; swap('twin','speed');}
   SND.sfx(p.shDir>0?'ok':'sel'); toast((p.shDir>0?'Shifted to twin: ':'Shifted to speed: ')+'SPEED '+p.pw.speed+'  TWIN '+p.pw.twin,90);
 }
+// Power shield (RB, N / L, or the touch button): 5 seconds of taking only 10% damage. When it ends it uses up one dot,
+// the newest one: from the power-up collected last. That dot blinks on the strip while the shield is up.
+const PSH_T=300, PSH_THRU=10; // 5 seconds; every 10th shielded hit gets through = 90% protection
+function lastDot(p){const h=p.hist||[]; for(let i=h.length-1;i>=0;i--)if(p.pw[h[i]]>0)return h[i]; return null;}
+function powerShield(p){
+  if(p.psh>0)return;
+  if(!lastDot(p)){SND.sfx('deny'); toast('The power shield needs a power-up dot',80); return;}
+  p.psh=PSH_T; SND.sfx('ok'); toast('Power shield up',60);
+}
+function spendShieldDot(p){
+  const h=p.hist||[]; let id=null;
+  for(let i=h.length-1;i>=0&&!id;i--){const d=h[i]; h.splice(i,1); if(p.pw[d]>0)id=d;}
+  if(!id)return;
+  p.pw[id]--; if(id==='field')p.field=Math.min(p.field,p.pw.field); if(id==='wing')p.whp=Math.min(p.whp,wingMax(p));
+  SND.sfx('sel'); toast('Power shield used a dot: '+POWERS.find(P=>P.id===id).name+(p.pw[id]?' down to stage '+p.pw[id]:' gone'),110);
+}
 // what each player takes into the next stage (a ship lost wipes everything but speed)
 function storeCarry(L){const run=G.planets[L.pi].run; if(!run)return;
   run.pw=L.pl.map(p=>({pw:{...p.pw},bar:p.bar,field:p.field,whp:p.whp,hist:(p.hist||[]).slice()}));}
@@ -1822,7 +1841,10 @@ function loseDot(p){ // the most recently gained stage is lost, but speed always
 // every enemy bullet goes through here; on the first planet (Rust) only every second one is fired
 function ebPush(L,b){ if(L.pi===6&&((L.ebN=(L.ebN||0)+1)&1))return; b.vx*=L.bspd; b.vy*=L.bspd; L.eb.push(b); }
 function hurtPlayer(L,p){
-  if(p.inv>0||p.rsh>0||!p.alive)return;
+  if(p.inv>0||p.rsh>0||p.pshCool>0||!p.alive)return;
+  // Power shield soaks 90% of the damage: the leftover tenths add up, so every 10th shielded hit gets through.
+  // After a soaked hit the ship is safe for as long as after a real one, so hits never land faster.
+  if(p.psh>0){p.pshCool=80; if(++p.pshD<PSH_THRU){SND.sfx('clink'); L.fx.push({x:p.x,y:p.y,t:0,spark:true}); return;} p.pshD=0;}
   if(p.field>0){p.field--; p.inv=40; SND.sfx('clink'); L.fx.push({x:p.x,y:p.y,t:0,spark:true}); p.fieldT=0; return;}
   p.shield--; p.inv=80; SND.sfx('hit'); L.shake=6;
   if(p.shield<=0){
@@ -1989,7 +2011,8 @@ function drawPowerBar(L){
     if(c0){const hc=(L.t>>3)&1?7:1; frame(x,y,35,10,hc,0); ctx.strokeStyle=PAL[hc]; ctx.strokeRect(x-0.5,y-0.5,36,11); txt(P.label,x+17,y+1,7,5,'center');}
     else {frame(x,y,35,10,G.newPw===P.id?((L.t>>3)&1?7:1):(maxed?11:6),0); txt(P.label,x+17,y+1,maxed?11:(lv?13:15),5,'center');}
     if(c1)frame(x-1,y-1,37,12,13);
-    if(P.id!=='nova')for(let k=0;k<P.max;k++)rect(x+17-P.max*2+k*4,y+7,3,2,k<lv?13:11);
+    if(P.id!=='nova'){const spend=p0&&p0.psh>0&&lastDot(p0)===P.id; // the dot the power shield will use up blinks red
+      for(let k=0;k<P.max;k++)rect(x+17-P.max*2+k*4,y+7,3,2,k<lv?((spend&&k===lv-1&&((L.t>>2)&1))?2:13):11);}
     hit(x,y-1,35,12,()=>{if(p0&&p0.bar===i)TOUCH.pw[0]=true;});
   });
   const x=300, ws=ownedWeapons();
@@ -2041,6 +2064,7 @@ ST.level={
       if(solidHit(L,p.x,p.y,4)){hurtPlayer(L,p); p.x=Math.max(12,p.x-2);}
       p.trail.push({x:p.x,y:p.y}); if(p.trail.length>60)p.trail.shift();
       if(p.inv)p.inv--; if(p.cool)p.cool--;
+      if(p.pshCool>0)p.pshCool--; if(p.psh>0&&--p.psh===0)spendShieldDot(p);
       if(p.rsh>0){p.rsh--; for(const b of L.eb)if(!b.dead&&dist2(b.x,b.y,p.x,p.y)<18*18)b.dead=true;}   // respawn forcefield soaks bullets
       const tf=TOUCH.on&&(TOUCH.autoFire||td.down);
       if((c.fire||tf)&&p.cool<=0)fireWeapon(L,p);
@@ -2048,6 +2072,7 @@ ST.level={
       if(c.bombP)useBomb(L,p);
       if(c.pwP)activatePower(L,p);
       if(c.shP)shiftPoint(p);
+      if(c.pshP)powerShield(p);
       const firing=c.fire||tf;
       if(p.pw.ghost){const mid=(L.yTop+L.yBot)/2, ty=p.y+(p.y>mid?-30:30); p.gx+=(p.x-6-p.gx)*0.15; p.gy+=(ty-p.gy)*0.15;}
       if(p.pw.orbs){p.oa+=0.11; for(let k=0;k<p.pw.orbs;k++){const o=orbPos(p,k);
@@ -2181,6 +2206,9 @@ ST.level={
       for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); spr(OPTF[(L.t>>2)%OPTF.length],o.x,o.y,(L.t>>3)&1?7:10,{mc1:1});}
       if(p.rsh>0&&(p.rsh>60||((p.rsh>>2)&1))){const c=[3,14,1][(L.t>>2)%3]; ctx.strokeStyle=PAL[c]; ctx.lineWidth=1;
         for(const rr of[0,2]){ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,17+rr+Math.sin(L.t*0.2),14+rr,0,0,TAU); ctx.stroke();}}
+      if(p.psh>0&&(p.psh>60||((p.psh>>2)&1))){ // power shield: dashed bubble, blinks in its last second, flashes white when it soaks a hit
+        ctx.setLineDash([3,2]); ctx.lineDashOffset=-(L.t>>1); ctx.strokeStyle=PAL[p.pshCool>70?1:13]; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,23,19,0,0,TAU); ctx.stroke(); ctx.setLineDash([]);}
       if(p.inv&&(p.inv>>2)%2)continue;
       spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
       if(p.pw.wing&&p.whp>0&&!(p.winv&&(p.winv>>2)%2)){spr(ETYPES.fighter.fr[((L.t/5)|0)%6],p.wx,p.wy,7,{flip:true,mc1:1});
@@ -2518,6 +2546,8 @@ tbtn('tb-wpn',()=>{TOUCH.sw[0]=true;});
 tbtn('tb-bomb',()=>{TOUCH.bomb[0]=true;});
 tbtn('tb-pw',()=>{TOUCH.pw[0]=true;});
 tbtn('tb-sh',()=>{TOUCH.sh[0]=true;});
+tbtn('tb-psh',()=>{TOUCH.psh[0]=true;});
+const tbPsh=document.getElementById('tb-psh'); let pshLit=false;
 tbtn('tb-pause',()=>{KP.Escape=true;});
 tbtn('tb-back',()=>{KP.Escape=true;});
 
@@ -2528,6 +2558,7 @@ function render(){
   if(STATE)STATE.draw(); drawToasts();
   const mode=STATE===ST.level?(LV&&LV.state==='play'&&!LV.pause?'level':'levelmenu'):STATE===ST.title?'title':'menu';
   if(document.body.dataset.mode!==mode)document.body.dataset.mode=mode;
+  const ps=STATE===ST.level&&!!LV&&LV.pl[0].psh>0; if(ps!==pshLit){pshLit=ps; tbPsh.classList.toggle('lit',ps);}
 }
 function loop(now){
   acc+=Math.min(100,now-last); last=now;
