@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.11</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.12</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.11';
+const VERSION='2.12';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -862,13 +862,13 @@ function stopLongTrack(){Music.stopLong();}
 
 // ---------- world data ----------
 const PLANETS=[
-  {name:'Ignis',   shades:[9,2,10],  orbit:30, size:8,  speed:0.050, diff:7, bands:false, ring:false},
-  {name:'Aurum',   shades:[9,8,7],   orbit:48, size:11, speed:0.038, diff:6, bands:true,  ring:true},
-  {name:'Verdant', shades:[11,5,13], orbit:66, size:9,  speed:0.031, diff:5, bands:false, ring:false},
-  {name:'Glacia',  shades:[6,14,3],  orbit:84, size:10, speed:0.026, diff:4, bands:true,  ring:false},
-  {name:'Tethys',  shades:[11,3,1],  orbit:102,size:8,  speed:0.022, diff:3, bands:false, ring:false},
-  {name:'Amethyst',shades:[6,4,10],  orbit:120,size:12, speed:0.019, diff:2, bands:true,  ring:false},
-  {name:'Rust',    shades:[9,8,10],  orbit:138,size:9,  speed:0.016, diff:1, bands:false, ring:false},
+  {name:'Ignis',   shades:[9,2,10],  orbit:30, size:6,  speed:0.050, diff:7, bands:false, ring:false},
+  {name:'Aurum',   shades:[9,8,7],   orbit:48, size:13, speed:0.038, diff:6, bands:true,  ring:true},
+  {name:'Verdant', shades:[11,5,13], orbit:66, size:10, speed:0.031, diff:5, bands:false, ring:false, moons:[{r:3,d:1.9,sp:0.9,ph:0.5,s:0}]},
+  {name:'Glacia',  shades:[6,14,3],  orbit:84, size:8,  speed:0.026, diff:4, bands:true,  ring:false},
+  {name:'Tethys',  shades:[11,3,1],  orbit:102,size:12, speed:0.022, diff:3, bands:false, ring:false, moons:[{r:4,d:1.8,sp:0.6,ph:2.0,s:2}]},
+  {name:'Amethyst',shades:[6,4,10],  orbit:120,size:16, speed:0.019, diff:2, bands:true,  ring:false, moons:[{r:4,d:1.6,sp:0.55,ph:0,s:0},{r:3,d:2.3,sp:0.35,ph:3.4,s:1}]},
+  {name:'Rust',    shades:[9,8,10],  orbit:138,size:6,  speed:0.016, diff:1, bands:false, ring:false, moons:[{r:2,d:2.2,sp:1.3,ph:1.0,s:1}]},
 ];
 const STATION={orbit:152,speed:0.012};
 const CX=192, CY=130, ORX=1.15, ORY=0.66;
@@ -917,7 +917,7 @@ function newGame(){
   return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
-    qs:{},unlocked:1,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
+    qs:{},unlocked:7,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(SAVE_KEY,JSON.stringify(G));}catch(e){}}
@@ -925,7 +925,7 @@ function loadSave(){try{const s=localStorage.getItem(SAVE_KEY); if(s){const o=JS
 function hasSave(){try{return !!localStorage.getItem(SAVE_KEY);}catch(e){return false;}}
 
 // ---------- quests: 3 fixed quests per planet, some need a certain route ----------
-const isUnlocked=pi=>UNLOCK_ORDER.indexOf(pi)<G.unlocked;
+const isUnlocked=pi=>true;   // every planet is open: the threat against your ship power says where you stand
 function qState(pi,qi){const k=pi+'-'+qi; return G.qs[k]||(G.qs[k]={st:'open',prog:0});}
 function allQuests(){const out=[]; for(const pi of UNLOCK_ORDER){ if(!isUnlocked(pi))continue;
   WORLD[pi].quests.forEach((q,qi)=>out.push({pi,qi,q,s:qState(pi,qi)})); } return out;}
@@ -934,8 +934,6 @@ function questNeed(q){return q.n||1;}
 function completeQuest(pi,qi){
   const s=qState(pi,qi), q=WORLD[pi].quests[qi]; s.st='done'; s.prog=questNeed(q);
   toast('Quest complete on '+PLANETS[pi].name+': '+q.text,200); SND.sfx('ok');
-  const k=UNLOCK_ORDER.indexOf(pi);
-  if(k===G.unlocked-1&&G.unlocked<7){G.unlocked++; toast(PLANETS[UNLOCK_ORDER[k+1]].name+' is now unlocked',260);}
   save();
 }
 // kind: 'kill' | 'rock' | 'clear' | 'guardian'
@@ -983,8 +981,9 @@ function drawStars(speed,t){
 // ---------- planet rendering (dithered, lit from the sun) ----------
 const BAYER=[0,8,2,10,12,4,14,6,3,11,1,9,15,7,13,5].map(v=>(v+0.5)/16);
 const planetCache=new Map();
+const MOONP=[{shades:[11,12,15]},{shades:[9,8,12]},{shades:[6,14,3]}];   // grey rock, rusty rock, ice (drawn as planet ids 100+)
 function planetImg(pi,r,lx,ly,big){
-  const P=pi>=0?PLANETS[pi]:null, key=pi+':'+r+':'+Math.round(Math.atan2(ly,lx)/(Math.PI/12));
+  const P=pi>=100?MOONP[pi-100]:pi>=0?PLANETS[pi]:null, key=pi+':'+r+':'+Math.round(Math.atan2(ly,lx)/(Math.PI/12));
   let c=planetCache.get(key); if(c)return c;
   const n=r*2+1; c=document.createElement('canvas'); c.width=n; c.height=n;
   const x=c.getContext('2d'); const id=x.createImageData(n,n), d=id.data;
@@ -1004,6 +1003,10 @@ function planetImg(pi,r,lx,ly,big){
   }
   x.putImageData(id,0,0); planetCache.set(key,c); return c;
 }
+// a planet's moons on flattened orbits (like its ring): the far half is drawn before the planet, the near half after
+function drawMoons(b,t,front){const P=PLANETS[b.pi]; if(!P||!P.moons)return; const k=b.r/P.size;
+  for(const m of P.moons){const a=m.ph+t*m.sp; if((Math.sin(a)>=0)!==front)continue; const d=m.d*b.r+2;
+    drawPlanet(100+m.s,b.x+Math.cos(a)*d,b.y+Math.sin(a)*d*0.45,Math.max(1,Math.round(m.r*k)));}}
 function drawPlanet(pi,x,y,r,big=false){
   const lx=CX-x, ly=CY-y; const img=planetImg(pi,r,pi<0?1:lx,pi<0?0:ly,big);
   const P=PLANETS[pi];
@@ -2220,7 +2223,7 @@ ST.hub={
     for(const b of this.bodies()){const d=dist2(sh.x,sh.y,b.x,b.y), lim=(b.r+14)*(b.r+14); if(d<lim&&d<bd){bd=d;best=b;}}
     if((best&&!this.hover)||(best&&this.hover&&(best.pi!==this.hover.pi||best.station!==this.hover.station)))SND.sfx('sel');
     this.hover=best;
-    if(MENU.ok&&best){ if(best.station){SND.sfx('ok');go('station');} else if(!isUnlocked(best.pi)){SND.sfx('deny');toast('Locked. Finish a quest on '+PLANETS[UNLOCK_ORDER[UNLOCK_ORDER.indexOf(best.pi)-1]].name+' to open it.',160);} else {SND.sfx('ok');go('map',best.pi);} }
+    if(MENU.ok&&best){ if(best.station){SND.sfx('ok');go('station');} else {SND.sfx('ok'); if(tooDangerous(best.pi))toast('Warning: '+PLANETS[best.pi].name+' outclasses your ship!',150); go('map',best.pi);} }
     if(MENU.back)go('title');
     if(KP.Digit2){G.coop=!G.coop;save();toast(G.coop?'Two players: player 2 uses WASD + F G H or pad 2':'One player',150);}
     if(KP.KeyM)toggleMusic();
@@ -2241,9 +2244,10 @@ ST.hub={
     let sunDrawn=false;
     for(const b of bs){
       if(!sunDrawn&&b.depth>CY){drawSun(this.t);sunDrawn=true;}
-      if(b.station)drawStation(b.x,b.y,this.t); else { if(!isUnlocked(b.pi))ctx.globalAlpha=0.35; drawPlanet(b.pi,b.x,b.y,b.r); ctx.globalAlpha=1; if(!isUnlocked(b.pi)){rect(b.x-2,b.y-1,5,4,12);rect(b.x-1,b.y-3,3,2,12);rect(b.x,b.y,1,1,0);} }
-      const hasQ=b.station?allQuests().some(x=>x.s.st==='done'):allQuests().some(x=>x.pi===b.pi&&x.s.st==='active');
-      if(hasQ&&((this.t/15|0)%2))txt('!',b.x,b.y-b.r-11,7,8,'center');
+      if(b.station)drawStation(b.x,b.y,this.t); else {drawMoons(b,this.t/60,false); drawPlanet(b.pi,b.x,b.y,b.r); drawMoons(b,this.t/60,true);}
+      if(b.station){ if(allQuests().some(x=>x.s.st==='done')&&((this.t/15|0)%2))txt('!',b.x,b.y-b.r-11,7,8,'center'); }
+      else if(tooDangerous(b.pi)){ if((this.t/20|0)%3)drawWarn(b.x,b.y-b.r-13); }         // too dangerous: a hazard sign
+      else if(allQuests().some(x=>x.pi===b.pi&&x.s.st==='active')&&((this.t/15|0)%2))txtO('!',b.x,b.y-b.r-19,7,14,'center');   // a quest here, and in range
     }
     if(!sunDrawn)drawSun(this.t);
     const sh=this.ship; spr(shipFrame(this.t),sh.x,sh.y,14,{flip:sh.flip});
@@ -2251,8 +2255,8 @@ ST.hub={
     // HUD
     rect(0,0,W,13,0); rect(0,13,W,1,11);
     txt('Credits '+G.credits,4,3,7,7); txt('Ships '+G.ships,110,3,15,7);
-    txt('Planets freed '+G.planets.filter(p=>p.freed>0).length+'/7',175,3,13,7); txt('Open '+G.unlocked+'/7',300,3,3,7);
-    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); txt('Ship power '+shipPower(),4,17,14,5); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
+    txt('Planets freed '+G.planets.filter(p=>p.freed>0).length+'/7',175,3,13,7); txt('Ship power '+shipPower(),290,3,14,7);
+    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
     const h=this.hover;
     if(h){
       frame(8,H-38,W-16,30,h.station?3:PLANETS[h.pi].shades[1],0);
@@ -2260,9 +2264,9 @@ ST.hub={
         txt(`Quests and upgrades.${done?' '+done+' reward'+(done>1?'s':'')+' waiting.':''}  ${OKW()} to dock.`,16,H-20,15,6);}
       else{const P=PLANETS[h.pi], pd=G.planets[h.pi];
         txt(P.name,16,H-33,P.shades[2]===1?P.shades[1]:P.shades[2],8);
-        {const t=planetThreat(h.pi), sp=shipPower(); txt('Threat '+t+(G.ngp?' (NG+'+G.ngp+')':''),110,H-32,10,7); txt('Your ship '+sp,G.ngp?225:175,H-32,sp>=t?13:sp>=t*0.8?7:10,7);}
-        if(!isUnlocked(h.pi)){txt('Locked. Finish a quest on '+PLANETS[UNLOCK_ORDER[UNLOCK_ORDER.indexOf(h.pi)-1]].name+' to open it.',16,H-20,10,6);}
-        else{const q=allQuests().filter(x=>x.pi===h.pi&&x.s.st==='active').length;
+        {const t=planetThreat(h.pi), sp=shipPower(), x2=G.ngp?225:175; txt('Threat '+t+(G.ngp?' (NG+'+G.ngp+')':''),110,H-32,10,7); txt('Your ship '+sp,x2,H-32,sp>=t?13:sp>=t*0.8?7:10,7);
+         if(tooDangerous(h.pi)&&((this.t/12|0)%2))txtO('DANGER',x2+84,H-32,2,7);}
+        {const q=allQuests().filter(x=>x.pi===h.pi&&x.s.st==='active').length;
         txt(`Levels found ${pd.seen.length}/11. ${pd.freed?'Freed x'+pd.freed+'. ':''}${pd.run?'Route in progress. ':''}${q?q+' quest'+(q>1?'s':'')+' active. ':''}${OKW()} to land.`,16,H-20,15,6);}}
     } else txt(TOUCH.on?'Drag anywhere to fly. Tap a planet to fly to it, tap again to land.':'Fly over a planet or the station, then press fire.   2: players   M: music',W/2,H-12,11,6,'center');
   }
@@ -2470,6 +2474,9 @@ function shipPower(){
 }
 const THREAT=[10,14,19,26,36,50,69];   // by planet difficulty 1-7 (Rust .. Ignis)
 function planetThreat(pi){return Math.round(THREAT[PLANETS[pi].diff-1]*(1+0.6*(G.ngp||0)));}
+const tooDangerous=pi=>shipPower()<planetThreat(pi)*0.8;   // the red zone: expect a beating
+// a red hazard triangle with a black '!'
+function drawWarn(x,y){for(let i=0;i<7;i++)rect(x-i,y+i,2*i+1,1,i===6?2:10); rect(x,y+2,1,2,0); rect(x,y+5,1,1,0);}
 // the ship power a shop item would give (buy it on a copy of the save, then put everything back)
 const BUYF=['power','engine','shield','bombsMax','ships','weapon','spreadLv','laserLv','homingLv','waveLv'];
 function powerAfter(s){const wep={...G.wep}, keep={}; for(const k of BUYF)keep[k]=G[k]; s.buy(); const v=shipPower();
@@ -3312,7 +3319,7 @@ ST.ending={
     for(const b of bodies){
       if(!sunDone&&b.depth>CY){this.sun(t,swell);sunDone=true;}
       if(b.station){drawStation(b.x,b.y,t);continue;}
-      drawPlanet(b.pi,b.x,b.y,b.r);
+      drawMoons(b,t*0.4/60,false); drawPlanet(b.pi,b.x,b.y,b.r); drawMoons(b,t*0.4/60,true);
       const k=UNLOCK_ORDER.indexOf(b.pi), lit=240+k*55;
       if(t>lit){ const a=Math.min(1,(t-lit)/40), rr=b.r+3+Math.sin(t*0.08+k)*1.5;
         ctx.globalAlpha=a; ctx.strokeStyle=PAL[PLANETS[b.pi].shades[2]===1?PLANETS[b.pi].shades[1]:PLANETS[b.pi].shades[2]];
