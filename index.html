@@ -106,7 +106,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 1.99</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.00</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -647,7 +647,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='1.99';
+const VERSION='2.00';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -1481,7 +1481,7 @@ function powerChain(){const idx=id=>POWERS.findIndex(P=>P.id===id);
 function nextPower(i){const c=powerChain(), k=c.indexOf(i); return c[(k+1)%c.length];}
 const SPRAYC=[2,7,5,14,4,3,10,13,8];
 const REINF=[2.5,5,7.5,10.5,13.5]; // score needed for reinforcement levels 1-5
-const REINF_SUB=['','More ships, heavier armour, more fire','Armour up again, enemies fire spreads','Bullet storms begin','Heavy armour, heavy spreads, double waves','Full bullet storm, maximum armour'];
+const REINF_SUB=['','More ships, heavier armour','Armour up again, more fire','Enemies fire spreads','Bullet storms begin','Full bullet storm, heavy spreads'];
 // scenes per level: A | B1 B2 | C1-C4 | D1-D4 | guardian
 // s space, i floating islands, o planet in the background, f surface, c canyon, w ocean, x inside a structure
 const SCENES=['s|ii|oooo|wxcf|x','s|ii|oooo|iwxw|x','s|ii|oooo|ffcf|x','s|ii|oooo|fxfc|x','s|ii|oooo|wcww|x','s|ii|oooo|wcwc|x','s|ii|oooo|fcfc|x'].map(s=>s.replace(/\|/g,''));
@@ -1683,7 +1683,7 @@ function makeBoss(L,mini){
   const art=mini?GUNART:BOSSART[L.pi], cols=art.cw, rows=art.ch;
   const cells=art.cells.map(q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}));
   const w=cols*24,h=rows*21;
-  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?50:110)+d*(mini?14:32))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
+  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
     c:P.shades[1]===1?14:P.shades[1],vuln:false,flash:0,turrets:[],core:art.core};
   B.hp*=1+L.heat*0.2; B.maxhp=B.hp;
   const tpos=art.tur;
@@ -1744,7 +1744,7 @@ function heatOf(L){
   for(const p of L.pl){ if(!p.alive)continue; let s=shop; for(const P of POWERS)s+=(P.id==='wing'&&!p.whp?0:(p.pw[P.id]||0))*P.w; best=Math.max(best,s); }
   if(L.pl.length>1)best+=1;
   let lv=0; for(const t of REINF)if(best>=t)lv++;
-  const cap=[5,5,5,5,4,3,2][L.pi]; return Math.min(lv,cap+(L.ng||0));   // early planets cap the reinforcements
+  const cap=[5,4,3,3,2,2,1][L.pi]; return Math.min(lv,cap+(L.ng||0));   // early planets cap the reinforcements
 }
 function nova(L){
   SND.sfx('bomb'); L.flash=18; L.eb.length=0;
@@ -1854,7 +1854,7 @@ function updateEnemy(L,e){
       if(s<0)a=clamp(a,-Math.PI+0.2,-0.2); else a=clamp(a,0.2,Math.PI-0.2);
       e.ang+=(a-e.ang)*0.1;
       e.fc--; if(e.fc<=0&&e.x<W-8&&e.x>8&&alive.length){
-        e.fc=Math.max(40,200-L.d*12)/(1+L.ng*0.4)/(1+L.heat*0.3)*(0.7+L.r()*0.6);
+        e.fc=Math.max(40,200-L.d*12)/(1+L.ng*0.4)/(1+L.heat*0.15)*(0.7+L.r()*0.6);
         const spd=(1.6+L.d*0.12)*(1+L.ng*0.25), tx=e.x+Math.cos(e.ang)*9, ty=e.y+s*5+Math.sin(e.ang)*9;
         ebPush(L,{x:tx,y:ty,vx:Math.cos(e.ang)*spd,vy:Math.sin(e.ang)*spd,t:0});
       }
@@ -1865,7 +1865,7 @@ function updateEnemy(L,e){
   if(e.ex&&(e.x<-40||e.x>W+50||e.y<-50||e.y>H+40))e.dead=true;
   if(!e.rock&&e.pat!=='jump'&&(L.d>=2||L.heat>=(L.pi===6?2:1)||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
     e.fc=Math.max(50,(e.turret?110:320-L.d*20))*(e.elite?0.55:1)*(0.7+L.r()*0.6)/(1+L.ng*0.4);
-    e.fc/=(1+L.heat*0.5)*L.ease*L.ease; const n=L.pi===6?1:L.heat>=4?5:L.heat>=2?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
+    e.fc/=(1+L.heat*0.25)*L.ease*L.ease; const n=L.pi===6?1:L.heat>=5?5:L.heat>=3?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
 }
 
 function updateBoss(L){
@@ -1969,10 +1969,10 @@ ST.level={
     if(KP.KeyM)toggleMusic();
     if(L.t===210&&L.heat>0&&!L.banner){L.banner={t:0,dur:170,title:'WARNING',sub:'Reinforcements level '+L.heat,sub2:REINF_SUB[L.heat],col:2}; SND.sfx('alarm');}
     if(L.t%30===0){const h=heatOf(L); if(h>L.heat){L.banner={t:0,dur:170,title:'WARNING',sub:'Reinforcements level '+h,sub2:REINF_SUB[h],col:2}; SND.sfx('alarm');} L.heat=h;}
-    if(L.heat>=3&&L.t%(L.heat>=5?180:300)===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; const nr=L.heat>=5?16:12; for(let i=0;i<nr;i++){const a=i/nr*TAU+L.t; ebPush(L,{x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
+    if(L.heat>=4&&L.t%(L.heat>=5?200:320)===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; const nr=L.heat>=5?16:12; for(let i=0;i<nr;i++){const a=i/nr*TAU+L.t; ebPush(L,{x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
     L.t++; L.wx+=L.scroll; if(L.shake)L.shake--; if(L.flash)L.flash--; if(L.intro>0)L.intro--;
     while(L.ev.length&&L.ev[0].t<=L.t){const ev=L.ev.shift();
-      if(ev.kind==='form'){const h=L.heat, e2=Object.assign({},ev,{n:ev.n+Math.round(h*2*L.ease*L.ease)}); spawnForm(L,e2); if(h&&L.r()<h*0.25)spawnForm(L,Object.assign({},e2,{pat:pick(L.r,['sine','line','swoop']),mirror:true}));}
+      if(ev.kind==='form'){const h=L.heat, e2=Object.assign({},ev,{n:Math.min(11,ev.n+Math.round(h*0.8*L.ease*L.ease))}); spawnForm(L,e2); if(h&&L.r()<h*0.15)spawnForm(L,Object.assign({},e2,{pat:pick(L.r,['sine','line','swoop']),mirror:true}));}
       else if(ev.kind==='rocks'){for(let i=0;i<ev.n;i++)spawnRock(L);}
       else if(ev.kind==='meteors'){for(let i=0;i<ev.n;i++)spawnMeteor(L,i*18);}
       else if(ev.kind==='island')spawnIsland(L,ev.cannon);
