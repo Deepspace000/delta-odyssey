@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.08</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.09</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.08';
+const VERSION='2.09';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -730,7 +730,8 @@ function sprImg(b,c,mc1=15,mc3=0,flip=false,flash=false){
 // an enemy type's current frame; wide types are two sprites, swapped and mirrored when they fly in from the left
 function sprT(T,t,x,y,c,o={}){const k=((t/T.an)|0)%T.fr.length;
   if(!T.wide){spr(T.fr[k],x,y,c,o); if(T.ov&&!o.flash)spr(T.ov[k],x,y,1,{flip:o.flip}); return;}
-  const d=o.flip?-12:12; spr(T.fr[k],x-d,y,c,o); spr(T.fr2[k],x+d,y,c,o);}
+  const d=o.flip?-12:12; spr(T.fr[k],x-d,y,c,o); spr(T.fr2[k],x+d,y,c,o);
+  if(T.ov&&!o.flash){spr(T.ov[k],x-d,y,1,{flip:o.flip}); spr(T.ov2[k],x+d,y,1,{flip:o.flip});}}
 function spr(b,x,y,c,o={}){ctx.drawImage(sprImg(b,c,o.mc1??15,o.mc3??0,!!o.flip,!!o.flash),Math.round(x-12),Math.round(y-10));}
 
 // ---------- input ----------
@@ -1314,16 +1315,16 @@ coin:{seq:[0,1,2,3,4,5,6,7],rows:[
 'kggkkcckkcck .kcccccccck. ............ kggkkkkkkcck kggkkcckkcck ..kcggggck.. ............ .kcggggggck.',
 'kgkkccggkkck kggkkkkkkcck .....kk..... kgkkggggkkck kgkkggggkkck .kcccccccck. ............ kggkkkkkkcck',
 'kckkcccgckck kgkkccggkkck .kkkkggkkkk. kckgcgkcgkck kckgccccgkck kggkkkkkkcck ....kkkk.... kgkkccggkkck',
-'kckggcccckck kckggcccckck kcggggggggck kckgcgkcgkck kckgcgkcgkck kgkkggggkkck .kkkcccckkk. kckggcccckck',
-'kckkggkkkkck kckkggkkkkck kcccccccccck kckccckcckck kckgcgkcgkck kckgcgkcgkck kcggggggggck kckkggkkkkck',
+'kckggcccckck kckggcccckck kcgggggggcck kckgcgkcgkck kckgcgkcgkck kgkkggggkkck .kkkcccckkk. kckggcccckck',
+'kckkggkkkkck kckkggkkkkck kcccccccccck kckccckcckck kckgcgkcgkck kckgcgkcgkck kcgggggggcck kckkggkkkkck',
 'kckggcccckck kckggcccckck .kkkcccckkk. kckkcccckkck kckccckcckck kckgcgkcgkck kcccccccccck kckggcccckck',
 'kckkcccgckck kckkccggkkck ....kkkk.... kcckkkkkkcck kckcccccckck kckccckcckck .kkkkggkkkk. kckkccggkkck',
-'kckkccggkkck kcckkkkkkcck ............ .kcccccccck. kckkcccckkck kckkcccckkck .....kk..... kcckkkkkkcck',
-'kcckkcckkcck .kcggggggck. ............ ..kcccccck.. kcckkcckkcck kcckkkkkkcck ............ .kcccccccck.',
-'.kcckkkkcck. .kggkgkkggk. ............ .kggkggkggk. .kcckkkkcck. .kcggggggck. ............ ..kcccccck..',
-'..kcggggck.. ..kk.k..kk.. ............ ..kk.kk.kk.. ..kcggggck.. .kggkgkkggk. ............ .kggkggkggk.',
-'..kgkgkkgk.. ............ ............ ............ ..kgkgkkgk.. ..kk.k..kk.. ............ ..kk.kk.kk..',
-'.kggkgkkggk. ............ ............ ............ .kggkgkkggk. ............ ............ ............',
+'kckkcccckkck kcckkkkkkcck ............ .kcccccccck. kckkcccckkck kckkcccckkck .....kk..... kcckkkkkkcck',
+'kcckkcckkcck .kcgggcccck. ............ ..kcccccck.. kcckkcckkcck kcckkkkkkcck ............ .kcccccccck.',
+'.kcckkkkcck. .kggkckkcck. ............ .kggkcckcck. .kcckkkkcck. .kcggccccck. ............ ..kcccccck..',
+'..kcgcccck.. ..kk.k..kk.. ............ ..kk.kk.kk.. ..kcgcccck.. .kggkckkcck. ............ .kggkcckcck.',
+'..kgkckkck.. ............ ............ ............ ..kgkckkck.. ..kk.k..kk.. ............ ..kk.kk.kk..',
+'.kggkckkcck. ............ ............ ............ .kggkckkcck. ............ ............ ............',
 '..kk.k..kk.. ............ ............ ............ ..kk.k..kk.. ............ ............ ............',
 '............ ............ ............ ............ ............ ............ ............ ............',
 ]},
@@ -1359,18 +1360,18 @@ orrery:{seq:[0,1,2,3,4,5],rows:[
 'kgck....kcck kggkkkkkkcck ....kkkk.... ....kkkk.... ....k..k.... kggkkkkkkcck',
 'kgk......kck kgk.kkkk.kck ...kcccck... ...kcccck... ....kkkk.... kgk......kck',
 'kgk.kkkk.kck kgkkcccckkck ..kcckkcck.. ..kcckkcck.. ...kcccck... kgk.kkkk.kck',
-'kckkcccckkck kgkcgkkgckck ..kcgkkgck.. ..kcgkkgck.. ..kcgkkgck.. kckkcccckkck',
-'kckggkkggkck kckggkkggkck ..kggkkggk.. ..kggkkggk.. ..kggkkggk.. kckggkkggkck',
-'kckggkkggkck kckggkkggkck ..kggkkggk.. ..kggkkggk.. ..kggkkggk.. kckggkkggkck',
-'kckggkkggkck kckggkkggkck ..kggkkggk.. ..kggkkggk.. ..kggkkggk.. kckggkkggkck',
-'kckkcccckkgk kckcgkkgckck ..kcgkkgck.. ..kcgkkgck.. ..kcgkkgck.. kckkcccckkck',
-'kck.kkkk.kgk kckkcccckkgk ..kcckkcck.. ..kcckkcck.. ...kcccck... kck.kkkk.kgk',
-'kck......kgk kck.kkkk.kgk ...kcccck... ...kcccck... ....kkkk.... kck......kgk',
-'kcck....kcgk kcckkkkkkggk ....kkkk.... ....kkkk.... ....k..k.... kcckkkkkkggk',
-'.kck....kgk. .kcggggggck. ...kckkck... ....kgck.... ...kckkck... .kcccccgggk.',
-'.kcckkkkcgk. ..kkkkkkkk.. ...kgkkck... ....kgck.... ...kckkgk... ..kkkkkkkk..',
-'..kcggggck.. ...kggcck... ...kggcck... ....kgck.... ...kccggk... ...kccggk...',
-'...kcccck... ....kgck.... ....kgck.... ....kgck.... ....kcgk.... ....kcgk....',
+'kckkcccckkck kgkcgkkcckck ..kcgkkcck.. ..kcgkkcck.. ..kcgkkcck.. kckkcccckkck',
+'kckggkkcckck kckggkkcckck ..kggkkcck.. ..kggkkcck.. ..kggkkcck.. kckggkkcckck',
+'kckggkkcckck kckggkkcckck ..kggkkcck.. ..kggkkcck.. ..kggkkcck.. kckggkkcckck',
+'kckggkkcckck kckggkkcckck ..kggkkcck.. ..kggkkcck.. ..kggkkcck.. kckggkkcckck',
+'kckkcccckkck kckcgkkcckck ..kcgkkcck.. ..kcgkkcck.. ..kcgkkcck.. kckkcccckkck',
+'kck.kkkk.kck kckkcccckkck ..kcckkcck.. ..kcckkcck.. ...kcccck... kck.kkkk.kck',
+'kck......kck kck.kkkk.kck ...kcccck... ...kcccck... ....kkkk.... kck......kck',
+'kcck....kcck kcckkkkkkcck ....kkkk.... ....kkkk.... ....k..k.... kcckkkkkkcck',
+'.kck....kck. .kcgcccccck. ...kckkck... ....kcck.... ...kckkck... .kcccccccck.',
+'.kcckkkkcck. ..kkkkkkkk.. ...kckkck... ....kcck.... ...kckkck... ..kkkkkkkk..',
+'..kcccccck.. ...kcccck... ...kcccck... ....kcck.... ...kcccck... ...kcccck...',
+'...kcccck... ....kcck.... ....kcck.... ....kcck.... ....kcck.... ....kcck....',
 '....kkkk.... .....kk..... .....kk..... .....kk..... .....kk..... .....kk.....',
 ]},
 flare:{seq:[0,1,2,3,4,5,6,7],rows:[
@@ -1448,10 +1449,10 @@ angler:{wide:1,seq:[0,1,2,3],rows:[
 '.kggkgggk.....kgk....... .kggkgggk.....kgk....... .kggkgggk.....kgk....... .kggkgggk.....kgk.......',
 'kggk.kkggk...kggk....... kggk.kkggk...kgck....... kggk.kkggk...kggk....... kggk.kkggk...kgck.......',
 'kcck...kggk.kgcgk....... kck....kggk.kgcck....... kcck...kggk.kgcgk....... kck....kggk.kgcck.......',
-'cggck...kgkkgckgk....... cgck....kgkkgckck....... cggck...kgkkgckgk....... cgck....kgkkgckck.......',
-'cggck.kkkkkggcccgkk..... kck...kkkkkggcccckk..... cggck.kkkkkggcccgkk..... kck...kkkkkggcccckk.....',
+'cwwck...kgkkgckgk....... cwck....kgkkgckck....... cwwck...kgkkgckgk....... cwck....kgkkgckck.......',
+'cwgck.kkkkkggcccgkk..... kck...kkkkkggcccckk..... cwgck.kkkkkggcccgkk..... kck...kkkkkggcccckk.....',
 'kcck.kkgggkkgggggggkkk.. .k...kkgggkkgggggggkk... kcck.kkgggkkgggggggkkk.. .k...kkgggkkgggggggk....',
-'.kk..kgckcgkgcccckgccckk .....kgckcgkgcccckgcckk. .kk..kgckcgkgcccckgccckk .....kgckcgkgcccckgckk..',
+'.kk..kgwkcgkgcccckgccckk .....kgwkcgkgcccckgcckk. .kk..kgwkcgkgcccckgccckk .....kgwkcgkgcccckgckk..',
 '.....kgckcgkggggggggcccc .....kgckcgkggggggggccck .....kgckcgkggggggggcccc .....kgckcgkggggggggcck.',
 '.....kgckcgkkkkkkkkkkkkk .....kgckcgkkkkkkkkkkkk. .....kgckcgkkkkkkkkkkkkk .....kgckcgkkkkkkkkkkk..',
 '.....kkgggkkgggggkkkkkkk .....kkgggkkgggggkkkkkk. .....kkgggkkgggggkkkkkkk .....kkgggkkgggggkkkkk..',
@@ -1490,9 +1491,9 @@ boss4:[
 'kcckkgkkkkckkkkckckkkckkckkkkkkckkkckckkckkggk..',
 '.kckckkcccccccccccccccckcckkkkkccccckggggggggk..',
 '.kcckcckcccccccccccggcccccggkkkccggckccccgggk...',
-'.kckcggckkkckkkkkkkggkkkkkggkkkkkggckkcckkgkkk..',
-'..kkcggckkkgkkkkkkkcckkkkkcckkkkkcckkkkkkckkkck.',
-'..kkcggckcggcggggkccccccgggcccccccccckkkcckkkcck',
+'.kckcwwckkkckkkkkkkggkkkkkggkkkkkggckkcckkgkkk..',
+'..kkcwwckkkgkkkkkkkcckkkkkcckkkkkcckkkkkkckkkck.',
+'..kkcwwckcggcggggkccccccgggcccccccccckkkcckkkcck',
 '.kcckcckkgggggggggcccccccgccccccccccckcccckkkggg',
 '..kkkkkkkggcggggggccccccccccccccccccckkkkkkkkcck',
 '..kkkkkccccgggkkgggkkkkkkkkkkkkkkkkkkkkkkkkkkck.',
@@ -1508,9 +1509,9 @@ boss4:[
 '..kkkkkccccgggkkgggkkkkkkkkkkkkkkkkkkkkkkkkkkck.',
 '..kkkkkkkggcggggggccccccccccccccccccckkkkkkkkcck',
 '.kcckcckkgggggggggcccccccgccccccccccckcccckkkggg',
-'..kkcggckcggcggggkccccccgggcccccccccckkkcckkkcck',
-'..kkcggckkkgkkkkkkkcckkkkkcckkkkkcckkkkkkckkkck.',
-'.kckcggckkkckkkkkkkggkkkkkggkkkkkggckkcckkgkkk..',
+'..kkcwwckcggcggggkccccccgggcccccccccckkkcckkkcck',
+'..kkcwwckkkgkkkkkkkcckkkkkcckkkkkcckkkkkkckkkck.',
+'.kckcwwckkkckkkkkkkggkkkkkggkkkkkggckkcckkgkkk..',
 '.kcckcckcccccccccccggcccccggkkkccggckccccgggk...',
 '.kckckkcccccccccccccccckcckkkkkccccckggggggggk..',
 'kcckkgkkkkckkkkckckkkckkckkkkkkckkkckckkckkggk..',
@@ -1554,9 +1555,9 @@ boss3:[
 '........kkkkkk...........kkkkkggkkkkckgkkgk.....',
 '...kkkkkkkkckkk..........kkkccggcccckkgkkgk.....',
 '...kcccckkccccck........kcckcckkcccckkkggk......',
-'..kcgggckkkccccck......kckkcccccccckkkkggk......',
-'..kcggckkkkkckkkck...kkkkkkkkkkkkckkkkkkkk......',
-'..kcgckcckkkkkkkcck.kckkkkckkkkkkkcccckccckk....',
+'..kcwwwckkkccccck......kckkcccccccckkkkggk......',
+'..kcwwckkkkkckkkck...kkkkkkkkkkkkckkkkkkkk......',
+'..kcwckcckkkkkkkcck.kckkkkckkkkkkkcccckccckk....',
 '..kcckkccckkkggggckkcccccccckkkkckcccckccckck...',
 '..kkcccccckkggggggkkcccccccckkkcckcccckccckcck.k',
 '...kkkkkkkkkggggggkkkkkkkkkkkkkkkkkkccccckkkkkkg',
@@ -1574,9 +1575,9 @@ boss3:[
 '...kkkkkkkkkggggggkkkkkkkkkkkkkkkkkkccccckkkkkkg',
 '..kkcccccckkggggggkkcccccccckkkcckcccckccckcck.k',
 '..kcckkccckkkggggckkcccccccckkkkckcccckccckck...',
-'..kcgckcckkkkkkkcck.kckkkkckkkkkkkcccckccckk....',
-'..kcggckkkkkckkkck...kkkkkkkkkkkkckkkkkkkk......',
-'..kcgggckkkccccck......kckkcccccccckkkkggk......',
+'..kcwckcckkkkkkkcck.kckkkkckkkkkkkcccckccckk....',
+'..kcwwckkkkkckkkck...kkkkkkkkkkkkckkkkkkkk......',
+'..kcwwwckkkccccck......kckkcccccccckkkkggk......',
 '...kcccckkccccck........kcckcckkcccckkkggk......',
 '...kkkkkkkkckkk..........kkkccggcccckkgkkgk.....',
 '........kkkkkk...........kkkkkggkkkkckgkkgk.....',
@@ -1622,8 +1623,8 @@ boss2:[
 'kggk..........kccccccccckkkkkkkkcckkkkkkckkck...',
 'ggggk....kk..kccckkkkkgggkgggkgggkgggkgggkkk....',
 'gggggkkkkcck.kkkckkkckccckccckccckccckccckkkk...',
-'ggggggggcggckggggcccccccckccckccckccckccckkkk...',
-'ggggggggcggckgggggcccckkkkkkkkkkkkkkkkkkkkkkk...',
+'ggggggggcwwckggggcccccccckccckccckccckccckkkk...',
+'ggggggggcwwckgggggcccckkkkkkkkkkkkkkkkkkkkkkk...',
 'gkggggggkcckggggggkccckkkkkkkkkkkkkkkkkkkkkkkk..',
 'gkkggggkcckgggkkgggkkkkkgggkgggkgggkgggkgggkkk..',
 'gk.kgggccckggkkkkggkcckkccckccckccckccckccckkk..',
@@ -1637,8 +1638,8 @@ boss2:[
 'gk.kgggccckggkkkkggkcckkccckccckccckccckccckkk..',
 'gkkggggkcckgggkkgggkkkkkgggkgggkgggkgggkgggkkk..',
 'gkggggggkcckggggggkccckkkkkkkkkkkkkkkkkkkkkkkk..',
-'ggggggggcggckgggggcccckkkkkkkkkkkkkkkkkkkkkkk...',
-'ggggggggcggckggggcccccccckccckccckccckccckkkk...',
+'ggggggggcwwckgggggcccckkkkkkkkkkkkkkkkkkkkkkk...',
+'ggggggggcwwckggggcccccccckccckccckccckccckkkk...',
 'gggggkkkkcck.kkkckkkckccckccckccckccckccckkkk...',
 'ggggk....kk..kccckkkkkgggkgggkgggkgggkgggkkk....',
 'kggk..........kccccccccckkkkkkkkcckkkkkkckkck...',
@@ -1679,8 +1680,8 @@ boss1:[
 'kcgkkccckkkk....kcckkcck.kcggck.....k..k........',
 'kgkkkkkkgccck....kkkkkk..kcggck....kckkck.......',
 'kgccckkkggccck...kkkkcck.kgccgk....kcggck.......',
-'gggcccccgccccck..kckkcckkcgkkgck...kcggck.......',
-'gggcckcgggggggk.kckkkkckgcckkccgk..kgccgk.......',
+'gwgcccccgccccck..kckkcckkcgkkgck...kcggck.......',
+'gwgcckcgggggggk.kckkkkckgcckkccgk..kgccgk.......',
 'ggkkkkckkkkkkckkkkkkkkckkcgkkgck..kcgkkgck......',
 'kk....kkkkkkkcckkkkkkckkgkgccgk..kgcckkccgk.....',
 '.......kccccccccccccccccckcggck...kcgkkgck......',
@@ -1710,8 +1711,8 @@ boss1:[
 '.......kccccccccccccccccckcggck...kcgkkgck......',
 'kk....kkkkkkkcckkkkkkckkgkgccgk..kgcckkccgk.....',
 'ggkkkkckkkkkkckkkkkkkkckkcgkkgck..kcgkkgck......',
-'gggcckcgggggggk.kckkkkckgcckkccgk..kgccgk.......',
-'gggcccccgccccck..kckkcckkcgkkgck...kcggck.......',
+'gwgcckcgggggggk.kckkkkckgcckkccgk..kgccgk.......',
+'gwgcccccgccccck..kckkcckkcgkkgck...kcggck.......',
 'kgccckkkggccck...kkkkcck.kgccgk....kcggck.......',
 'kgkkkkkkgccck....kkkkkk..kcggck....kckkck.......',
 'kcgkkccckkkk....kcckkcck.kcggck.....k..k........',
@@ -1751,9 +1752,9 @@ boss0:[
 '...............kk.kgckkkccccck...kk.kggck.......',
 '.....kk.......kcckggccccccccck..kgckkkkkk.......',
 '....kcck.....kckkkgckkkkkccck....kkkccccck......',
-'...kcggck...kckkkkcccccckcck..k..kkkckkkck.k....',
-'...kcggckk.kccggkcckkkkk.kk..kckkcckccccckkck...',
-'...kcggckckkkggggccccck......kcckcckkkkkkckck...',
+'...kcwwck...kckkkkcccccckcck..k..kkkckkkck.k....',
+'...kcwwckk.kccggkcckkkkk.kk..kckkcckccccckkck...',
+'...kcwwckckkkggggccccck......kcckcckkkkkkckck...',
 '..kckcckkkkkggggggkkkkk......kkkkkkkcccckckkk...',
 '.kggkkkkkkkgggkkggkkkcck....kcckkkkkcckkkkkcck..',
 '.kgggccccckggkkkkggkccck...kccckkcckcckkcckccck.',
@@ -1767,9 +1768,9 @@ boss0:[
 '.kgggccccckggkkkkggkccck...kccckkcckcckkcckccck.',
 '.kggkkkkkkkgggkkggkkkcck....kcckkkkkcckkkkkcck..',
 '..kckcckkkkkggggggkkkkk......kkkkkkkcccckckkk...',
-'...kcggckckkkggggccccck......kcckcckkkkkkckck...',
-'...kcggckk.kccggkcckkkkk.kk..kckkcckccccckkck...',
-'...kcggck...kckkkkcccccckcck..k..kkkckkkck.k....',
+'...kcwwckckkkggggccccck......kcckcckkkkkkckck...',
+'...kcwwckk.kccggkcckkkkk.kk..kckkcckccccckkck...',
+'...kcwwck...kckkkkcccccckcck..k..kkkckkkck.k....',
 '....kcck.....kckkkgckkkkkccck....kkkccccck......',
 '.....kk.......kcckggccccccccck..kgckkkkkk.......',
 '...............kk.kgckkkccccck...kk.kggck.......',
@@ -1804,28 +1805,28 @@ mini4:[
 '..kkk...............kgck',
 '.kccck.............kggcc',
 '..kggk.............kgcck',
-'..kccck...........kgckk.',
-'...kkkk...........kgkkk.',
-'..kkccck.........kgcccck',
-'.kcckcck.........kgccck.',
-'kggccckkkkkkkkkkkkckkk..',
-'ggckkckggccckkkkkkkkkk..',
-'cckccccggccccccccccccck.',
-'gkkkccckkcgggggggggggk..',
-'kgkkkcccccccccccccccck..',
-'kgkkkckkkkkkkkkkkkkkkk..',
-'.kkkkccccccccccccccccck.',
-'.kkkkccccccccccccccccck.',
-'kgkkkckkkkkkkkkkkkkkkk..',
-'kgkkkcccccccccccccccck..',
-'gkkkccckkcgggggggggggk..',
-'cckccccggccccccccccccck.',
-'ggckkckggccckkkkkkkkkk..',
-'kggccckkkkkkkkkkkkckkk..',
-'.kcckcck.........kgccck.',
-'..kkccck.........kgcccck',
-'...kkkk...........kgkkk.',
-'..kccck...........kgckk.',
+'..kccck.........k.kgckk.',
+'...kkkk........kgkkgkkk.',
+'..kkccck.....k..kkgcccck',
+'.kcckcck....kgk..kkckck.',
+'kggccckkkkkkkkkkkkkkkk..',
+'gwckkckckkggcccckggccck.',
+'cckccckckkcccccckccccck.',
+'gkkkccccckkkkggkkkkkkkgk',
+'kgkkkcggckggggkgggggggk.',
+'kgkkkcccckccccccccccccgk',
+'.kkkkcccckkkkkkkkkkkkkk.',
+'.kkkkcccckkkkkkkkkkkkkk.',
+'kgkkkcccckccccccccccccgk',
+'kgkkkcggckggggkgggggggk.',
+'gkkkccccckkkkggkkkkkkkgk',
+'cckccckckkcccccckccccck.',
+'gwckkckckkggcccckggccck.',
+'kggccckkkkkkkkkkkkkkkk..',
+'.kcckcck....kgk..kkckck.',
+'..kkccck.....k..kkgcccck',
+'...kkkk........kgkkgkkk.',
+'..kccck.........k.kgckk.',
 '..kggk.............kgcck',
 '.kccck.............kggcc',
 '..kkk...............kgck',
@@ -1849,26 +1850,26 @@ mini3:[
 '......kcckgcccgcccggk...',
 '.....kcckggcccccccgk....',
 '......kkkggkkkkkkkgk....',
-'.....kkkkkkkkkkkkkkk....',
-'....kccckccccccccccck...',
-'....kccckccccccccccck...',
-'...kcccccccccccccccck...',
-'k...kkkkkkkkkkkkkkkkck..',
-'gkkkccccccccccccccccck..',
-'gggkgggggggggggggggggk..',
-'gcccccccccccccccccccck..',
-'gcckkkkkkkkkkkkkkkkkk...',
-'ccccccccckkkkkkkkkkk....',
-'ccccccccckkkkkkkkkkk....',
-'gcckkkkkkkkkkkkkkkkkk...',
-'gcccccccccccccccccccck..',
-'gggkgggggggggggggggggk..',
-'gkkkccccccccccccccccck..',
-'k...kkkkkkkkkkkkkkkkck..',
-'...kcccccccccccccccck...',
-'....kccckccccccccccck...',
-'....kccckccccccccccck...',
-'.....kkkkkkkkkkkkkkk....',
+'....kkkkgkkkkkkkkckkk...',
+'...kcggccccckggcccccck..',
+'...kcccccccckcccccccck..',
+'...kckkkkkkkkkkkkkkkck..',
+'k...kkkkkkkkkkkkkkkkkk..',
+'gkkkgggggggggccccccccgk.',
+'gwwkkkkkgkkkggggggggck..',
+'gcccccccccckkkkkkkkkcgk.',
+'gcckckkkkkkkcccckckcck..',
+'ccccccccccckcccckckcck..',
+'ccccccccccckcccckckcck..',
+'gcckckkkkkkkcccckckcck..',
+'gcccccccccckkkkkkkkkcgk.',
+'gwwkkkkkgkkkggggggggck..',
+'gkkkgggggggggccccccccgk.',
+'k...kkkkkkkkkkkkkkkkkk..',
+'...kckkkkkkkkkkkkkkkck..',
+'...kcccccccckcccccccck..',
+'...kcggccccckggcccccck..',
+'....kkkkgkkkkkkkkckkk...',
 '......kkkggkkkkkkkgk....',
 '.....kcckggcccccccgk....',
 '......kcckgcccgcccggk...',
@@ -1897,18 +1898,18 @@ mini2:[
 '.....kckkckkcccccccck...',
 '....kcgggcccccccccccck..',
 '.....kkkkkkkkkkkkkkkkk..',
-'.....kkkkkkkkkkkkkkkkck.',
-'..kkkccccccccccccccccck.',
-'.kcgkccccccccccccccccck.',
-'.kcgcccccccccccccccccck.',
-'kkcgckkggkkkkkkkkkkkkkck',
-'ggggkgggccckkkkkkkkkkck.',
-'ggggkgggccckkkkkkkkkkck.',
-'kkcgckkggkkkkkkkkkkkkkck',
-'.kcgcccccccccccccccccck.',
-'.kcgkccccccccccccccccck.',
-'..kkkccccccccccccccccck.',
-'.....kkkkkkkkkkkkkkkkck.',
+'.....kkgkkkkkkkkkkkkkck.',
+'..kkkggccckggccckggccck.',
+'.kcgkccccckccccckcccccgk',
+'.kcgckkkkggkkkkggkkkkkgk',
+'kkcgcgggggkgggggkgggggck',
+'gwggkccccccccccccccccck.',
+'gwggkccccccccccccccccck.',
+'kkcgcgggggkgggggkgggggck',
+'.kcgckkkkggkkkkggkkkkkgk',
+'.kcgkccccckccccckcccccgk',
+'..kkkggccckggccckggccck.',
+'.....kkgkkkkkkkkkkkkkck.',
 '.....kkkkkkkkkkkkkkkkk..',
 '....kcgggcccccccccccck..',
 '.....kckkckkcccccccck...',
@@ -1941,18 +1942,18 @@ mini1:[
 '........kccckcck.....k..',
 '...k....kccccck.........',
 '..kgk....kkccckkkk......',
-'.kgggk..kkkccccccckk....',
-'.kgkcckkgggccccccccck...',
-'.kggcccgggcccccccckkck..',
-'.kcgccccgccccccccckkkk..',
-'.kcckkkkkkkkkkkkkkcckkk.',
-'.kcccggggggcccccccccccck',
-'.kcccggggggcccccccccccck',
-'.kcckkkkkkkkkkkkkkcckkk.',
-'.kcgccccgccccccccckkkk..',
-'.kggcccgggcccccccckkck..',
-'.kgkcckkgggccccccccck...',
-'.kgggk..kkkccccccckk....',
+'.kgwgk..kkkccccccckkk.k.',
+'.kgkcckkggccccckckckckck',
+'.kggcccgccccccckckckckck',
+'.kcgcccckkkkkkkkccccccck',
+'.kcckkkkggggggcccggcccck',
+'.kcccgggcccccgggggkggggk',
+'.kcccgggcccccgggggkggggk',
+'.kcckkkkggggggcccggcccck',
+'.kcgcccckkkkkkkkccccccck',
+'.kggcccgccccccckckckckck',
+'.kgkcckkggccccckckckckck',
+'.kgwgk..kkkccccccckkk.k.',
 '..kgk....kkccckkkk......',
 '...k....kccccck.........',
 '........kccckcck.....k..',
@@ -1987,14 +1988,14 @@ mini0:[
 '......kkgcccckkk........',
 '....kkccccccckkk.k......',
 '...kcgkccccccgcckckk....',
-'..kccggcccccgggckckck...',
-'.kcccgggcccccgcckcccckk.',
-'kckkkkkkkkkkkkkkkckkkcck',
-'cccccccccccccccckckccccc',
-'cccccccccccccccckckccccc',
-'kckkkkkkkkkkkkkkkckkkcck',
-'.kcccgggcccccgcckcccckk.',
-'..kccggcccccgggckckck...',
+'..kccgwcccccgggckckck...',
+'.kcccckckckkggccccccckk.',
+'kckkcckckckkcccccckkkcck',
+'ccccggggkggggkgggckccccc',
+'ccccggggkggggkgggckccccc',
+'kckkcckckckkcccccckkkcck',
+'.kcccckckckkggccccccckk.',
+'..kccgwcccccgggckckck...',
 '...kcgkccccccgcckckk....',
 '....kkccccccckkk.k......',
 '......kkgcccckkk........',
@@ -2020,36 +2021,36 @@ gunship:[
 '.................kck....',
 '................kccck...',
 '................kccck...',
-'................kcck....',
-'.kkkkkkkkkk....kgkk.....',
-'kgcggggggcck...kgcck....',
-'gggccccccccck..kgggk....',
-'cgckkkkkkccck.kckkk.....',
-'kkkkkkkkkkkckkkckk......',
-'cccgggcggccccccccck.....',
-'kccccccccggccccckckk.k..',
+'.......k........kcck....',
+'.kkkkkkgkkk....kgkk.....',
+'kgcgkggggkck...kgcck....',
+'gggckcccckcck..kgggk....',
+'cgckkkkkkkcck.kckkk.....',
+'kkkkkkkkkkkckkkckkk.k...',
+'cccgkgcggkggccckckckck..',
+'kccckcccckccccckckckck..',
 '.kkkkkkkckkkkkkkkkkkkck.',
 '.....kggkkkkkkkkkckkkcck',
-'....kggggcccccccccckkggg',
-'...kggggggccccccccckkcck',
-'...kggkkggccccccccckkck.',
-'...kggkkcgkkkkkkkkkkkk..',
-'...kgkkkkgcccccccccck...',
-'...kgkkkkgcccccccccck...',
-'...kggkkcgkkkkkkkkkkkk..',
-'...kggkkggccccccccckkck.',
-'...kggggggccccccccckkcck',
-'....kggggcccccccccckkggg',
+'....kgwggcgggggccccckggg',
+'...kggggggkgkkggggggkcck',
+'...kggkkggcccckkkkkkkck.',
+'...kggkkcgcccccccccckk..',
+'...kgkkkkgkkkkkkkkkkk...',
+'...kgkkkkgkkkkkkkkkkk...',
+'...kggkkcgcccccccccckk..',
+'...kggkkggcccckkkkkkkck.',
+'...kggggggkgkkggggggkcck',
+'....kgwggcgggggccccckggg',
 '.....kggkkkkkkkkkckkkcck',
 '.kkkkkkkckkkkkkkkkkkkck.',
-'kccccccccggccccckckk.k..',
-'cccgggcggccccccccck.....',
-'kkkkkkkkkkkckkkckk......',
-'cgckkkkkkccck.kckkk.....',
-'gggccccccccck..kgggk....',
-'kgcggggggcck...kgcck....',
-'.kkkkkkkkkk....kgkk.....',
-'................kcck....',
+'kccckcccckccccckckckck..',
+'cccgkgcggkggccckckckck..',
+'kkkkkkkkkkkckkkckkk.k...',
+'cgckkkkkkkcck.kckkk.....',
+'gggckcccckcck..kgggk....',
+'kgcgkggggkck...kgcck....',
+'.kkkkkkgkkk....kgkk.....',
+'.......k........kcck....',
 '................kccck...',
 '................kccck...',
 '.................kck....',
@@ -2081,12 +2082,16 @@ function genSprites(){
       if(shine){const Q=painter(); pixFill(Q,rows.map(r=>r.replace(/[^w]/g,'.').replace(/w/g,'c'))); Q.write(nb); over.push(nb++);}}
     return {fr:d.seq.map(i=>blocks[i]), ov:shine?d.seq.map(i=>over[i]):null};};
   // a wide design (two sprites side by side) is cut into a front and a back sprite per frame
-  const pixSeqW=d=>{const n=d.rows[0].split(' ').length, F=[], B=[];
+  const pixSeqW=d=>{const n=d.rows[0].split(' ').length, F=[], B=[], FO=[], BO=[], shine=d.rows.some(l=>l.includes('w'));
     for(let k=0;k<n;k++){const rows=d.rows.map(l=>l.split(' ')[k]);
-      for(const [dst,o] of [[F,0],[B,12]]){const P=painter(); pixFill(P,rows.map(r=>r.slice(o,o+12))); P.write(nb); dst.push(nb++);}}
-    return [d.seq.map(i=>F[i]),d.seq.map(i=>B[i])];};
+      for(const [dst,o] of [[F,0],[B,12]]){const P=painter(); pixFill(P,rows.map(r=>r.slice(o,o+12))); P.write(nb); dst.push(nb++);}
+      if(shine)for(const [dst,o] of [[FO,0],[BO,12]]){const Q=painter(); pixFill(Q,rows.map(r=>r.slice(o,o+12).replace(/[^w]/g,'.').replace(/w/g,'c'))); Q.write(nb); dst.push(nb++);}}
+    const q=a=>d.seq.map(i=>a[i]); return [q(F),q(B),shine?q(FO):null,shine?q(BO):null];};
+  // the white shine of a big picture (bosses): its 'w' cells on their own sprites, drawn in white over the picture
+  const shineCells=(art,cw,ch)=>{if(!art||!art.some(l=>l.includes('w')))return null;
+    const Q=painter(cw,ch); pixFill(Q,art.map(r=>r.replace(/[^w]/g,'.').replace(/w/g,'c'))); const r=Q.writeBlocks(nb); nb=r.next; return r.cells;};
   for(const id in NEWT){const [name,hp,val,an,c,beh]=NEWT[id], px=PIX[id];
-    if(px&&px.wide){const [fr,fr2]=pixSeqW(px); ETYPES[id]={name,hp,val,an,c,beh,fr,fr2,wide:true,made:true};}
+    if(px&&px.wide){const [fr,fr2,ov,ov2]=pixSeqW(px); ETYPES[id]={name,hp,val,an,c,beh,fr,fr2,ov,ov2,wide:true,made:true};}
     else{const s=px?pixSeq(px):{fr:frames(DESIGNS[id]),ov:null}; ETYPES[id]={name,hp,val,an,c,beh,fr:s.fr,ov:s.ov,made:true};}}
   CAPF=frames(DESIGNS.cap,2,false); OPTF=frames(DESIGNS.opt,4,false); GEMF=frames(DESIGNS.gem,4,false); BOMBF=frames(DESIGNS.bombpk,2,false);
   NODE.cache.icon=GEMF[0]; NODE.cache.c=7;
@@ -2103,10 +2108,10 @@ function genSprites(){
   // one guardian hull per planet, painted as a single large picture and cut into sprites
   BOSSART=[];
   for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch), art=BIGPIX['boss'+pi]; if(art)pixFill(P,art); else {d.draw(P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next;
-    BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,core:d.core,tur:d.tur});}
+    BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,ov:shineCells(art,d.cw,d.ch),core:d.core,tur:d.tur});}
   MINIART=[];
-  for(let pi=0;pi<7;pi++){const P=painter(2,2), art=BIGPIX['mini'+pi]; if(art)pixFill(P,art); else {P.sx=0.92; MINIDESIGN[pi](P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next; MINIART.push(r.cells);}
-  {const P=painter(2,2); pixFill(P,BIGPIX.gunship); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,core:[-10,0],tur:[[-24,-10],[-24,10]]};}
+  for(let pi=0;pi<7;pi++){const P=painter(2,2), art=BIGPIX['mini'+pi]; if(art)pixFill(P,art); else {P.sx=0.92; MINIDESIGN[pi](P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next; r.cells.ov=shineCells(art,2,2); MINIART.push(r.cells);}   // .ov: its white shine
+  {const P=painter(2,2); pixFill(P,BIGPIX.gunship); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,ov:shineCells(BIGPIX.gunship,2,2),core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
 let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[];
 // mini-bosses: one larger ship per planet, 2x2 sprites (48x42), facing left
@@ -2632,9 +2637,9 @@ function boom(L,x,y,big){L.fx.push({x,y,t:0,big}); SND.sfx(big?'big':'boom'); if
 function makeBoss(L,mini){
   const r=L.r, P=PLANETS[L.pi], d=L.d;
   const art=mini?GUNART:BOSSART[L.pi], cols=art.cw, rows=art.ch;
-  const cells=art.cells.map(q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}));
+  const place=q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}), cells=art.cells.map(place), ov=(art.ov||[]).map(place);
   const w=cols*24,h=rows*21;
-  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
+  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,ov,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
     c:(!mini&&BOSSDESIGN[L.pi].col)||(P.shades[1]===1?14:P.shades[1]),vuln:false,flash:0,turrets:[],core:art.core};
   B.hp*=(1+L.heat*0.2)*(!mini&&L.pi===5?1.35:1); B.maxhp=B.hp;   // the Prism Queen was the softest guardian
   const tpos=art.tur;
@@ -3085,13 +3090,13 @@ ST.level={
     drawBack(L); drawSolids(L); drawTerrain(L); drawBands(L); drawMist(L);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
-      if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
+      if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.cells.ov&&!(e.flash>2))for(const q of e.cells.ov)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,1); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
       else sprT(e.T,e.t,e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2,mc1:(e.arm||0)>=2?1:15}); }  // armoured reinforcements get bright white plating
     const B=L.boss;
     if(B){ const dying=B.dead&&(B.deathT&4);
-      if(!dying)for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1});
+      if(!dying){for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1}); if(!(B.flash>1))for(const c of B.ov)spr(c.b,B.x+c.ox,B.y+c.oy,1);}
       if(!B.dead){const fr=ETYPES.ring.fr[((B.t/4)|0)%6]; spr(fr,B.x+B.core[0],B.y+B.core[1],B.vuln?((B.t/6|0)%2?2:7):11,{mc1:B.vuln?1:12});}
       for(const t of B.turrets)if(!t.dead)sprT(t.T,t.t,t.x,t.y,t.c,{flip:!t.T.made,flash:t.flash>2}); }
     for(const k of L.pk){ if(k.kind==='cap'){spr(CAPF[(k.t>>3)%CAPF.length],k.x,k.y,(k.t>>3)&1?2:10);continue;}
