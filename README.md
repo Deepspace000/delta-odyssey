@@ -4,6 +4,8 @@ A new voyage built on the Commodore 64 shooter *Delta* (Thalamus, 1987).
 
 Fly a solar system of seven planets, take quests at the space station, pick your route through 77 levels and 7 guardian fights, then take on New Game+.
 
+Between the planets sit four asteroid mines: vertical levels, two down a shaft and two back up, with a boss at the exit. Shoot the mineral deposits out of the shaft walls and spend the minerals on ships in the station's Ships tab (grey, green, blue, orange, red, purple and gold, each with a small perk).
+
 ## You need your own copy of Delta
 
 This repository contains no Delta graphics or music. When the game opens, drop in your own Delta disk image (the `.d64` file, or the `.zip` it came in). The game reads the original sprites and Rob Hubbard's music from your disk, inside your browser. Nothing is uploaded.

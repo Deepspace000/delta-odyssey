@@ -125,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.32</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.33</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -665,8 +665,15 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 
 'use strict';
 // ================= Delta Odyssey =================
-const W=384,H=240;
-const VERSION='2.32';
+let W=384,H=240;   // the playfield size the level code sees; vertical levels swap it (vmode)
+const SW=384,SH=240,SPB=216;   // the real screen, always
+// Vertical levels (the asteroid mines) run the normal level code in a playfield turned 90 degrees: along the shaft is the
+// level's x (the 203 rows between the top bar and the power strip), across the shaft is its y (the full 384 px width).
+// Everything (weapons, powers, enemies, reinforcements) works unchanged; only drawing and the controls are turned.
+const VW=203; let TOPY=13, VXF=null;
+function vmode(on){ if(on){W=VW; PB=SW; H=SW+24; TOPY=0;} else {W=SW; H=SH; PB=SPB; TOPY=13;} }
+const vIn=(L,a,b)=>!L.vert?[a,b]:L.vert===1?[b,-a]:[-b,a];   // screen direction -> level direction
+const VERSION='2.33';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -701,6 +708,7 @@ const pick=(r,a)=>a[Math.floor(r()*a.length)];
 const dist2=(ax,ay,bx,by)=>(ax-bx)*(ax-bx)+(ay-by)*(ay-by);
 const col=i=>typeof i==='number'?PAL[i]:i;
 function txt(s,x,y,c=1,size=8,align='left'){
+  if(VXF)[x,y]=VXF(x,y);
   const k=S*DPR; octx.font=`${Math.round(size*k)}px Silkscreen, 'Courier New', monospace`;
   octx.textAlign=align; octx.textBaseline='top';
   octx.fillStyle='#000'; octx.fillText(s,Math.round((x+0.6)*k),Math.round((y+0.6)*k));
@@ -709,6 +717,7 @@ function txt(s,x,y,c=1,size=8,align='left'){
 function tw(s,size=8){const k=S*DPR; octx.font=`${Math.round(size*k)}px Silkscreen, 'Courier New', monospace`; return octx.measureText(s).width/k;}
 // outlined text with no box behind it, for messages over the action
 function txtO(s,x,y,c=1,size=8,align='left'){
+  if(VXF)[x,y]=VXF(x,y);
   const k=S*DPR; octx.font=`${Math.round(size*k)}px Silkscreen, 'Courier New', monospace`;
   octx.textAlign=align; octx.textBaseline='top'; const X=Math.round(x*k), Y=Math.round(y*k), o=Math.max(1,Math.round(k*0.6));
   octx.fillStyle='#000'; for(const [dx,dy] of [[-o,0],[o,0],[0,-o],[0,o],[o,o],[-o,-o],[o,-o],[-o,o]])octx.fillText(s,X+dx,Y+dy);
@@ -1087,6 +1096,21 @@ const NODE={
   cache:   {name:'Supply cache',icon:126,c:5, desc:'Light defence and lots of pickups.'},
   boss:    {name:'Guardian', icon:163,c:2, desc:''},
 };
+// ---------- asteroid mines: four asteroids between the planets. Each has two levels down a shaft and two back up (vertical
+// levels), then a boss. No quests. Mineral deposits in the shaft walls break off when shot; minerals buy ships (Ships tab).
+const ASTEROIDS=[
+ {name:'Grit',  diff:1.5, host:6, pools:[6,5], orbit:129, speed:0.017, phase:3.9, rock:[9,11], vein:[8,13], boss:['The Rock Crusher','A giant rock-crushing machine.']},
+ {name:'Flint', diff:3.5, host:4, pools:[4,3], orbit:93,  speed:0.024, phase:5.1, rock:[11,12],vein:[3,14], boss:['The Drill Worm','A drilling machine shaped like a worm.']},
+ {name:'Cobalt',diff:5.5, host:2, pools:[2,1], orbit:57,  speed:0.034, phase:0.7, rock:[6,11], vein:[14,4], boss:['The Ore Hauler','A huge armed mining ship.']},
+ {name:'Onyx',  diff:6.5, host:1, pools:[1,0], orbit:39,  speed:0.044, phase:2.6, rock:[11,0], vein:[10,7], boss:['The Core Guardian','An armoured machine guarding the core.']},
+];
+const AST_LV=[['Entry Shaft','assault','The way down into the asteroid.',1],['Deep Shaft','asteroids','Falling rocks, deeper down.',1],
+  ['Core Climb','ambush','Climbing back up from the core.',2],['Exit Shaft','elite','The last climb to the surface.',2]];
+function astThreat(a){const d=ASTEROIDS[a].diff; return Math.round((THREAT[Math.floor(d)-1]+THREAT[Math.ceil(d)-1])/2*(1+0.6*(G.ngp||0)));}
+const astDanger=a=>shipPower()<astThreat(a)*0.8;
+function astNodes(a){const A=ASTEROIDS[a]; return [...AST_LV.map(([name,type,desc,vert],id)=>({id,type,name,desc,vert,ast:a})),{id:4,type:'boss',name:A.boss[0],desc:A.boss[1],vert:2,ast:a}];}
+const runOf=L=>L.ast!=null?G.ast[L.ast].run:G.planets[L.pi].run;
+
 // The secret underground area: once all 11 levels of a planet have been found, a path opens from the first level down
 // through three magical caverns and back up to the same guardian. Each planet's caverns look different.
 const SECRET_LV=[
@@ -1146,7 +1170,7 @@ function newGame(){
   return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[],vc:[]})),
-    qs:{},qset:{},unlocked:7,coop:false,musicOn:true,ownMusic:false,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
+    qs:{},qset:{},ast:[0,1,2,3].map(()=>({run:null,freed:0,vc:[],visits:0})),minerals:0,shipCol:0,shipsOwned:[1,0,0,0,0,0,0],unlocked:7,coop:false,musicOn:true,ownMusic:false,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(slotKey(SLOT),JSON.stringify(G));}catch(e){}}
@@ -1306,6 +1330,7 @@ function drawStation(x,y,t){
   rect(x-4,y-4,8,8,12); rect(x-3,y-3,6,6,15); rect(x-1,y-1,2,2,11);
   rect(x-1,y-8,2,4,12); if(((t/20)|0)%2)rect(x-1,y-9,2,1,2); else rect(x-1,y-9,2,1,10);
 }
+function drawAsteroid(a,x,y,t){const A=ASTEROIDS[a], set=ROCKSETS[3+a%3]; spr(set[((t>>4)+a)%set.length],x,y,A.rock[0],{mc1:A.vein[0]});}
 function bodyPos(o,speed,t,phase){const a=phase+t*speed; return {x:CX+Math.cos(a)*o*ORX, y:CY+Math.sin(a)*o*ORY, a};}
 
 // ================= new enemies, drawn in Delta's sprite style =================
@@ -1746,6 +1771,519 @@ angler:{wide:1,seq:[0,1,2,3],rows:[
 };
 // Bosses: one picture each, cut into sprites (guardians 48x63, mini-bosses and the gunship 24x42).
 const BIGPIX={
+// the asteroid bosses (astbosses.py): designed facing down on screen, stored turned, as the vertical levels draw them
+aboss0:[
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........kkkkkkkkkkkk....',
+'.......kcccccccccccck...',
+'.......kcccccccccccck...',
+'.......kcgccgcccgccgck..',
+'..kkkkkkcgccgcccgckkck..',
+'.kgggkggggccgcccgckkck..',
+'.kgggkggggccgcccgccgcck.',
+'.kccckcccgccgcccgccgcck.',
+'.kccckcccgccgcccgccgcck.',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgwcck',
+'.kgggkggggccgcccgccwwwck',
+'.kccckcccgccgcccgccgwcck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgcggg',
+'.kccckcccgccgcccgccgcggg',
+'.kgggkggggccgcccgccgcggk',
+'..kkkkkkkgccgcccgccgcggk',
+'.kgggkggggccgcccgccgcggk',
+'.kccckcccgccgcccgccgcggk',
+'.kccckcccgccgcccgccgcggg',
+'.kgggkggggccgcccgccgcggg',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgckkccck',
+'.kgggkggggccgcccgckkccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggckkkkkkkkkccck',
+'.kccckcccgckkkkkkkkkccck',
+'.kccckcccgckkkkkkkkkccck',
+'.kgggkggggckkkkkkkkkccck',
+'..kkkkkkkgckgggggggkccck',
+'.kgggkggggckgggggggkccck',
+'.kccckcccgckgggggggkccck',
+'.kccckcccgckgggggggkccck',
+'.kgggkggggckggkkkggkccck',
+'..kkkkkkkgckggkkkggkccck',
+'.....k.kcgckggkkkggkccck',
+'.......kcgckggkkkggkccck',
+'.......kcgckggkkkggkcwck',
+'.......kcgckggkkkggkwwwk',
+'.......kcgckggkkkggkcwck',
+'..kkkkkkcgckggkkkggkccck',
+'.kgggkggggckggkkkggkccck',
+'.kgggkggggckggkkkggkccck',
+'.kccckcccgckgggggggkccck',
+'.kccckcccgckgggggggkccck',
+'.kgggkggggckgggggggkccck',
+'..kkkkkkkgckgggggggkccck',
+'.kgggkggggckkkkkkkkkccck',
+'.kccckcccgckkkkkkkkkccck',
+'.kccckcccgckkkkkkkkkccck',
+'.kgggkggggckkkkkkkkkccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgckkccck',
+'..kkkkkkkgccgcccgckkccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kccckcccgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgcggg',
+'.kccckcccgccgcccgccgcggg',
+'.kccckcccgccgcccgccgcggk',
+'.kgggkggggccgcccgccgcggk',
+'..kkkkkkkgccgcccgccgcggk',
+'.kgggkggggccgcccgccgcggk',
+'.kccckcccgccgcccgccgcggg',
+'.kccckcccgccgcccgccgcggg',
+'.kgggkggggccgcccgccgccck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgwcck',
+'.kccckcccgccgcccgccwwwck',
+'.kgggkggggccgcccgccgwcck',
+'..kkkkkkkgccgcccgccgccck',
+'.kgggkggggccgcccgccgccck',
+'.kccckcccgccgcccgccgcck.',
+'.kccckcccgccgcccgccgcck.',
+'.kgggkggggccgcccgccgcck.',
+'..kkkkkkkgccgcccgckkck..',
+'.....k.kcgccgcccgckkck..',
+'.......kcgccgcccgccgck..',
+'.......kcccccccccccck...',
+'.......kcccccccccccck...',
+'........kkkkkkkkkkkk....',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................'
+],
+aboss1:[
+'........................',
+'..................k.....',
+'.............k...kgk....',
+'............kgk.kgcgk...',
+'............kggkgcccgk..',
+'.............kkgccccck..',
+'..............kgcccccgk.',
+'..............kgcccccgk.',
+'..............kccccccck.',
+'..............kccccccck.',
+'..............kgcccccgk.',
+'...........k..kgggcccgk.',
+'..........kgkkggccgkck..',
+'...........kgggckkkggk..',
+'............kgckcgcgk...',
+'............kgccccgck...',
+'............kccccccck...',
+'............kccccccwk...',
+'............kcccccwwwk..',
+'.........k..kcgggccwk...',
+'........kgk.kgcccgcck...',
+'........kggkggccckkck...',
+'.........kgggckkkkggk...',
+'..........kgckkcccgk....',
+'..........kgcccgggck....',
+'..........kgccccccck....',
+'..........kcccccccck....',
+'.......k..kccggcccck....',
+'......kgk.kggccgccck....',
+'......kggkkgccccgcck....',
+'.......kggggcccckkgk....',
+'........kgggckkkcggk....',
+'........kggkkccccck.....',
+'........kgcccgcccgk.....',
+'........kgccccgggcgk....',
+'........kgccccccccgk....',
+'......k.kgcggggcccgk....',
+'.....kgkkggccccgccgk....',
+'......kgkkccccccgck.....',
+'.......kggccccckkck.....',
+'........kggckkkkcgk.....',
+'.......kggkkcccccgk.....',
+'......kggccgccccggk.....',
+'......kggcccgccgcck.....',
+'.....k.kgccggggccck.....',
+'....kgkkgcgcccggcck.....',
+'.....kgkggcccccgcck.....',
+'.....kgkgcccccccggk.....',
+'......kggccggggkkgk.....',
+'.......kgcggggggcgk.....',
+'........kgggggggggk.....',
+'.......kgggccccgggk.....',
+'......kgggccccccggk.....',
+'.....kkgggcccccccgk.....',
+'...kkgggggcccwwccggk....',
+'..kkkggkkgkccwwcccgk....',
+'.kk.kgkkggkccwwcccgk....',
+'.k..kkggggkccwwcccggk...',
+'...kkgggggkcccccccggk...',
+'.kkgggggggkccccccccgk...',
+'.kggggkkkgkccccccccgk...',
+'.kggkkkgggkccccccccgk...',
+'.kkkggggggkccccccccgk...',
+'.kggggggggkccccccccgk...',
+'.kggggggkgkccccccccgk...',
+'.kkkkkkkkgkccccccccgk...',
+'.kkgggggggkccccccccgk...',
+'...kggggggkcccccccggk...',
+'.k.kggggggkccwwcccggk...',
+'.kkkkkkkkgkccwwcccgk....',
+'....kgggkgkccwwcccgk....',
+'.k..kgggggcccwwccggk....',
+'.kkk.kkgggcccccccgk.....',
+'....kkkgggccccccggk.....',
+'......kkkggccccgggk.....',
+'.......kggggggggggk.....',
+'.......kgcggggggcgk.....',
+'......kggkkggggcggk.....',
+'.....kgkgcccccccggk.....',
+'.....kgkggcccccgcck.....',
+'....kgkkgcgcccggcck.....',
+'.....k.kgccggggccck.....',
+'......kggcccgccgcck.....',
+'......kggccgccccggk.....',
+'.......kgggcccckkgk.....',
+'........kggckkkkcgk.....',
+'.......kggkkcccccck.....',
+'......kgkkccccccgck.....',
+'.....kgkkggccccgccgk....',
+'......k.kgcggggcccgk....',
+'........kgccccccccgk....',
+'........kgccccgggcgk....',
+'........kgcccgcccgk.....',
+'........kggcgccckkk.....',
+'........kgggckkkcggk....',
+'.......kgggkkccccggk....',
+'......kggkkgccccgcck....',
+'......kgk.kggccgccck....',
+'.......k..kccggcccck....',
+'..........kcccccccck....',
+'..........kgccccccck....',
+'..........kgcccgggck....',
+'..........kgccgcckkk....',
+'.........kgggckkkkggk...',
+'........kggkgkkccccck...',
+'........kgk.kgcccgcck...',
+'.........k..kcgggccck...',
+'............kccccccwk...',
+'............kcccccwwwk..',
+'............kccccccwk...',
+'............kgccccgck...',
+'............kgcccgckk...',
+'...........kgggckkkggk..',
+'..........kgkkgkccgcck..',
+'...........k..kgggcccgk.',
+'..............kgcccccgk.',
+'..............kccccccck.',
+'..............kccccccck.',
+'..............kgcccccgk.',
+'..............kgcccccgk.',
+'.............kkgccccck..',
+'............kggkgcccgk..',
+'............kgk.kgcgk...',
+'.............k...kgk....',
+'..................k.....',
+'........................'
+],
+aboss2:[
+'........................',
+'........................',
+'........................',
+'........................',
+'........................',
+'.......kkkkkkkkkkk......',
+'......kckccccccccck.....',
+'......kckccccccccck.....',
+'......kckgcccgcccgck....',
+'......kckgcccgcwcgck....',
+'......kckgcccgwwwgck....',
+'......kccgcccgcwcgck....',
+'......kccgkcccccckcck...',
+'......kccgkcccccckcck...',
+'......kccgkcccccckcck...',
+'......kccgkkkkkkkkcck...',
+'......kccgkkkkkkkkcck...',
+'......kccgkcccccckcck...',
+'.....kcccgkcccccckcck...',
+'.....kcccgkcccccckcck...',
+'.....kckcgkkkkkkkkcck...',
+'.....kckcgkkkkkkkkcckkkk',
+'.....kckcgkcccccckccgggg',
+'.....kckcgkcccccckccgggg',
+'.....kckcgkcccccckccgggg',
+'.....kckcgkkkkkkkkccggkk',
+'.....kckcgkkkkkkkkccggkk',
+'.....kckcgkcccccckccggkk',
+'.....kckcgkcccccckccggkk',
+'.....kckcgkcccccckccggkk',
+'.....kcccgkkkkkkkkccggkk',
+'.....kcccgkkkkkkkkccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccgggg',
+'.....kcccgcccgcccgccgggg',
+'.....kcccgcccgcccgccgggg',
+'.....kcccgkggggggkcckkkk',
+'.....kcccgkggggggkcck...',
+'......kccgkggggggkcck...',
+'.....kkccgkkkkkkkkcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkggggggkcck...',
+'....kckccgkggggggkcck...',
+'....kckccgkggggggkcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkggggggkcck...',
+'....kccccgkggggggkcck...',
+'....kccccgkggggggkcck...',
+'....kccccgkkkkkkkkcck...',
+'....kccccgkkkkkkkkcck...',
+'....kccccgkggggggkcckkkk',
+'....kccccgkggggggkccgggg',
+'...kcccccgkggggggkccgggg',
+'..kccccccgkkkkkkkkccgggg',
+'..kccccccgkkkkkkkkccggkk',
+'.kggggcccgcccgcccgccggkk',
+'kcggggcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcgwwgcccgcccgcccgccggkk',
+'kcggggcccgcccgcccgccggkk',
+'.kggggcccgcccgcccgccgggg',
+'..kccccccgkcccccckccgggg',
+'..kccccccgkcccccckccgggg',
+'...kcccccgkcccccckcckkkk',
+'....kccccgkkkkkkkkcck...',
+'....kccccgkkkkkkkkcck...',
+'....kccccgkcccccckcck...',
+'....kccccgkcccccckcck...',
+'....kccccgkcccccckcck...',
+'....kccccgkkkkkkkkcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkcccccckcck...',
+'....kckccgkcccccckcck...',
+'....kckccgkcccccckcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkkkkkkkkcck...',
+'....kckccgkcccccckcck...',
+'.....kkccgkcccccckcck...',
+'......kccgkcccccckcckkkk',
+'.....kcccgkkkkkkkkccgggg',
+'.....kcccgkkkkkkkkccgggg',
+'.....kcccgcccgcccgccgggg',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgcccgcccgccggkk',
+'.....kcccgkggggggkccggkk',
+'.....kcccgkggggggkccggkk',
+'.....kckcgkggggggkccggkk',
+'.....kckcgkkkkkkkkccggkk',
+'.....kckcgkkkkkkkkccggkk',
+'.....kckcgkggggggkccgggg',
+'.....kckcgkggggggkccgggg',
+'.....kckcgkggggggkccgggg',
+'.....kckcgkkkkkkkkcckkkk',
+'.....kckcgkkkkkkkkcck...',
+'.....kckcgkggggggkcck...',
+'.....kckcgkggggggkcck...',
+'.....kcccgkggggggkcck...',
+'.....kcccgkkkkkkkkcck...',
+'......kccgkkkkkkkkcck...',
+'......kccgkggggggkcck...',
+'......kccgkggggggkcck...',
+'......kccgkggggggkcck...',
+'......kccgkkkkkkkkcck...',
+'......kccgkkkkkkkkcck...',
+'......kccgcccgcccgck....',
+'......kckgcccgcwcgck....',
+'......kckgcccgwwwgck....',
+'......kckgcccgcwcgck....',
+'......kckccccccccck.....',
+'......kckccccccccck.....',
+'.......kkkkkkkkkkk......',
+'........................',
+'........................',
+'........................',
+'........................',
+'........................'
+],
+aboss3:[
+'........................',
+'........................',
+'........................',
+'.k....k...........k....k',
+'kck..kck.........kck..kc',
+'kcckkcck.........kcckkcc',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'.kkgckk...........kkcgkk',
+'..kgck.............kcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'...kcgk...........kgcgk.',
+'...kcgk...........kgck..',
+'...kgck...........kgck..',
+'...kgck...........kgck..',
+'...kgcgk..........kcgk..',
+'...kgcgk..........kcgk..',
+'...kgcgk.........kgcgk..',
+'...kgcgk.........kgcgk..',
+'...kgcgk.........kgcgk..',
+'....kcgk.........kgcgk..',
+'....kcgk.........kgcgk..',
+'....kgck.........kgcgk..',
+'....kgck.........kgck...',
+'....kgcgk........kgck...',
+'....kgcgk........kcgk...',
+'....kgcgk........kcgk...',
+'....kgcgk........kcgk...',
+'....kgcgk.......kgcgk...',
+'.....kcgk.......kgcgk...',
+'.....kcck.......kgcgk...',
+'.....kgck.......kgcgk...',
+'.....kgcgk.kkkk.kgcgk...',
+'.....kgcgkkggggkkgck....',
+'.....kgggggggggggggk....',
+'.....kgggggggggggggk....',
+'.....kggggggccgggggk....',
+'......kggccgccgccggk....',
+'.....kgggccgccgccgggk...',
+'.....kggcccgccgcccggk...',
+'....kgggcccgccgcccgggk..',
+'....kgggcccgccgcccgggk..',
+'....kgcgcccgccgcccgcgk..',
+'...kggcgcccgccgcccgcggk.',
+'...kggcgcccgccgcccgcggk.',
+'...kgccgcccgccgcccgwcgk.',
+'...kgccgccckkcgcccwwwgk.',
+'..kggccgckkkkkkcccgwcggk',
+'..kggccgckkcckkcccgccggk',
+'..kggccgkkcccckkccgccggk',
+'..kggccgkcccccckccgccggk',
+'..kggccgkcckkcckccgccggk',
+'..kggcckkckkkkckkcgccggk',
+'..kggcckcckggwcckcgccggk',
+'..kggcckckggwwwckcgccggk',
+'..kggcckckgggwkckcgccggk',
+'..kggcckckggggkckcgccggk',
+'..kggcckckggggkckcgccggk',
+'..kggcckckggggkckcgccggk',
+'..kggcckckggggkckcgccggk',
+'..kggcckcckggkcckcgccggk',
+'..kggcckkckkkkckkcgccggk',
+'..kggccgkcckkcckccgccggk',
+'..kggccgkcccccckccgccggk',
+'..kggccgkkcccckkccgccggk',
+'..kggccgckkcckkcccgccggk',
+'..kggccgckkkkkkcccgccggk',
+'...kgccgccckkcgcccgwcgk.',
+'...kgccgcccgccgcccwwwgk.',
+'...kggcgcccgccgcccgwggk.',
+'...kggcgcccgccgcccgcggk.',
+'....kgcgcccgccgcccgcgk..',
+'....kgggcccgccgcccgggk..',
+'....kgggcccgccgcccgggk..',
+'.....kggcccgccgcccggk...',
+'.....kgggccgccgccgggk...',
+'......kggccgccgccggk....',
+'.....kggggggccgggggk....',
+'.....kgggggggggggggk....',
+'.....kgggggggggggggk....',
+'.....kgcgkkggggkkgck....',
+'.....kgcgk.kkkk.kgcgk...',
+'.....kgck.......kgcgk...',
+'.....kcck.......kgcgk...',
+'.....kcgk.......kgcgk...',
+'....kgcgk.......kgcgk...',
+'....kgcgk........kcgk...',
+'....kgcgk........kcgk...',
+'....kgcgk........kcgk...',
+'....kgcgk........kgck...',
+'....kgck.........kgck...',
+'....kgck.........kgcgk..',
+'....kcgk.........kgcgk..',
+'....kcgk.........kgcgk..',
+'...kgcgk.........kgcgk..',
+'...kgcgk.........kgcgk..',
+'...kgcgk.........kgcgk..',
+'...kgcgk..........kcgk..',
+'...kgcgk..........kcgk..',
+'...kgck...........kgck..',
+'...kgck...........kgck..',
+'...kcgk...........kgck..',
+'...kcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgcgk...........kgcgk.',
+'..kgck.............kcgk.',
+'.kkgckk...........kkcgkk',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'kcccccck.........kcccccc',
+'kcckkcck.........kcckkcc',
+'kckk.kck.........kckk.kc',
+'.k....k...........k....k',
+'........................',
+'........................',
+'........................'
+],
 boss4:[
 '................................................',
 '................................................',
@@ -2388,11 +2926,14 @@ function genSprites(){
   BOSSART=[];
   for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch), art=BIGPIX['boss'+pi]; if(art)pixFill(P,art); else {d.draw(P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next;
     BOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,ov:shineCells(art,d.cw,d.ch),core:d.core,tur:d.tur});}
+  ABOSSART=[];
+  for(let a=0;a<4;a++){const d=ABOSSDESIGN[a], P=painter(d.cw,d.ch), art=BIGPIX['aboss'+a]; pixFill(P,art); const r=P.writeBlocks(nb); nb=r.next;
+    ABOSSART.push({cw:d.cw,ch:d.ch,cells:r.cells,ov:shineCells(art,d.cw,d.ch),core:d.core,tur:d.tur});}
   MINIART=[];
   for(let pi=0;pi<7;pi++){const P=painter(2,2), art=BIGPIX['mini'+pi]; if(art)pixFill(P,art); else {P.sx=0.92; MINIDESIGN[pi](P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next; r.cells.ov=shineCells(art,2,2); MINIART.push(r.cells);}   // .ov: its white shine
   {const P=painter(2,2); pixFill(P,BIGPIX.gunship); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,ov:shineCells(BIGPIX.gunship,2,2),core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
-let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[];
+let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[],ABOSSART=[];
 // mini-bosses: one larger ship per planet, 2x2 sprites (48x42), facing left
 const MINIDESIGN=[
  null,null,null,null,null, // Ignis to Tethys are drawn art (BIGPIX mini0-4)
@@ -2404,6 +2945,12 @@ const MINIDESIGN=[
    P.line(14,15,40,15,2,3); P.line(14,27,40,27,2,3); P.line(27,7,27,35,2,3); P.line(16,11,38,11,2,1); P.line(16,31,38,31,2,1); for(let k=0;k<4;k++){P.ell(18+k*6,19,1.2,1,1);P.ell(18+k*6,23,1.2,1,1);} P.ell(33,21,3,2.6,1);},
 ];
 // Guardians: visual canvas is 24*cw x 21*ch, facing left. core/tur are offsets from the centre.
+// the asteroid bosses: Rock Crusher, Drill Worm, Ore Hauler, Core Guardian (wide across the shaft, short along it)
+const ABOSSDESIGN=[
+ {cw:2,ch:6,core:[6, 0],tur:[[8, -43], [8, 43], [-16, -25], [-16, 25]],col:8},
+ {cw:2,ch:6,core:[8, 0],tur:[[12, -45], [12, 45], [4, -25], [4, 25]],col:3},
+ {cw:2,ch:6,core:[4, 0],tur:[[-6, -55], [-6, 55], [-10, -23], [-10, 23]],col:14},
+ {cw:2,ch:6,core:[0, 0],tur:[[18, -51], [-16, -51], [18, 51], [-16, 51]],col:10}];
 const BOSSDESIGN=[
  {cw:4,ch:3,core:[-18,0],tur:[[-3,-12],[-3,12],[29,-9],[29,9]]}, // Heart of Ignis (drawn art: BIGPIX)
  {cw:4,ch:3,core:[-18,0],tur:[[8,-15],[8,15],[28,-13],[28,13]],col:7}, // Gilded Tyrant (drawn art: BIGPIX)
@@ -2423,7 +2970,7 @@ const BOSSDESIGN=[
 // ================= states =================
 let STATE=null, tickCount=0;
 const ST={};
-function go(s,arg){STATE=ST[s]; STATE.enter&&STATE.enter(arg);}
+function go(s,arg){vmode(0); VXF=null; STATE=ST[s]; STATE.enter&&STATE.enter(arg);}
 
 // ---------- title ----------
 ST.title={
@@ -2488,12 +3035,14 @@ ST.hub={
   enter(a){
     tune(TUNES.hub); this.t=this.t||0; this.hover=null;
     if(a&&a.fromPlanet!==undefined){const p=this.bodies().find(b=>b.pi===a.fromPlanet); if(p){this.ship.x=p.x+p.r+12;this.ship.y=p.y;this.ship.vx=this.ship.vy=0;}}
+    if(a&&a.fromAst!=null){const p=this.bodies().find(b=>b.ast===a.fromAst); if(p){this.ship.x=p.x+p.r+12;this.ship.y=p.y;this.ship.vx=this.ship.vy=0;}}
     if(a&&a.fromStation){const s=this.bodies().find(b=>b.station); this.ship.x=s.x-26;this.ship.y=s.y;this.ship.vx=this.ship.vy=0;}
     if(a&&a.intro)toast('Fly to the space station to pick up quests.',200);
   },
   bodies(){
     const out=[]; const t=this.t/60;
     PLANETS.forEach((P,i)=>{const p=bodyPos(P.orbit,P.speed,t,i*0.9+0.4); const sc=0.85+0.15*Math.sin(p.a); out.push({pi:i,x:p.x,y:p.y,r:Math.max(5,Math.round(P.size*sc)),depth:p.y});});
+    ASTEROIDS.forEach((A,a)=>{const p=bodyPos(A.orbit,A.speed,t,A.phase); out.push({ast:a,x:p.x,y:p.y,r:7,depth:p.y});});
     const s=bodyPos(STATION.orbit,STATION.speed,t,2.2); out.push({station:true,x:s.x,y:s.y,r:10,depth:s.y});
     return out;
   },
@@ -2503,7 +3052,7 @@ ST.hub={
     const dx=TOUCH.drag[0].dx+TOUCH.drag[1].dx, dy=TOUCH.drag[0].dy+TOUCH.drag[1].dy;
     if(x||y||dx||dy)this.target=null;
     if(dx||dy){sh.x=clamp(sh.x+dx*1.2,12,W-12); sh.y=clamp(sh.y+dy*1.2,24,H-12); sh.vx=dx*0.6; sh.vy=dy*0.6; if(dx<-0.3)sh.flip=true; if(dx>0.3)sh.flip=false;}
-    if(this.target){const tg=this.target.body?this.bodies().find(b=>this.target.body.station?b.station:b.pi===this.target.body.pi):this.target;
+    if(this.target){const tb=this.target.body, tg=tb?this.bodies().find(b=>tb.station?b.station:tb.ast!=null?b.ast===tb.ast:b.pi===tb.pi):this.target;
       const ddx=tg.x-sh.x, ddy=tg.y-sh.y, dd=Math.hypot(ddx,ddy); if(dd<4){this.target=null;} else {x=ddx/dd; y=ddy/dd;}}
     const acc=0.16+G.engine*0.04, mx=1.8+G.engine*0.35;
     sh.vx=(sh.vx+x*acc)*0.93; sh.vy=(sh.vy+y*acc)*0.93;
@@ -2512,9 +3061,10 @@ ST.hub={
     if(sh.vx<-0.2)sh.flip=true; if(sh.vx>0.2)sh.flip=false;
     let best=null,bd=1e9;
     for(const b of this.bodies()){const d=dist2(sh.x,sh.y,b.x,b.y), lim=(b.r+14)*(b.r+14); if(d<lim&&d<bd){bd=d;best=b;}}
-    if((best&&!this.hover)||(best&&this.hover&&(best.pi!==this.hover.pi||best.station!==this.hover.station)))SND.sfx('sel');
+    if((best&&!this.hover)||(best&&this.hover&&(best.pi!==this.hover.pi||best.station!==this.hover.station||best.ast!==this.hover.ast)))SND.sfx('sel');
     this.hover=best;
-    if(MENU.ok&&best){ if(best.station){SND.sfx('ok');go('station');} else {SND.sfx('ok'); if(tooDangerous(best.pi))toast('Warning: '+PLANETS[best.pi].name+' outclasses your ship!',150); go('map',best.pi);} }
+    if(MENU.ok&&best){ if(best.station){SND.sfx('ok');go('station');}
+      else if(best.ast!=null){SND.sfx('ok'); if(astDanger(best.ast))toast('Warning: '+ASTEROIDS[best.ast].name+' outclasses your ship!',150); go('amap',best.ast);} else {SND.sfx('ok'); if(tooDangerous(best.pi))toast('Warning: '+PLANETS[best.pi].name+' outclasses your ship!',150); go('map',best.pi);} }
     if(MENU.back)go('title');
     if(KP.Digit2){G.coop=!G.coop;save();toast(G.coop?'Two players: player 2 uses WASD + F G H or pad 2':'One player',150);}
     if(KP.KeyM)toggleMusic();
@@ -2522,8 +3072,8 @@ ST.hub={
   tap(g){
     let best=null,bd=1e9; for(const b of this.bodies()){const d=dist2(g.x,g.y,b.x,b.y); if(d<(b.r+14)*(b.r+14)&&d<bd){bd=d;best=b;}}
     const h=this.hover;
-    if(best&&h&&(best.station?h.station:best.pi===h.pi)){KP.Enter=true;return;}
-    if(best){this.target={body:{station:!!best.station,pi:best.pi}};SND.sfx('sel');}
+    if(best&&h&&(best.station?h.station:best.ast!=null?h.ast===best.ast:best.pi===h.pi)){KP.Enter=true;return;}
+    if(best){this.target={body:{station:!!best.station,pi:best.pi,ast:best.ast}};SND.sfx('sel');}
     else if(h)KP.Enter=true; else this.target={x:g.x,y:g.y};
   },
   draw(){
@@ -2531,24 +3081,31 @@ ST.hub={
     // orbits
     ctx.fillStyle=PAL[11];
     for(const o of[...PLANETS.map(p=>p.orbit),STATION.orbit]) for(let a=0;a<Math.PI*2;a+=4/o){ctx.fillRect(Math.round(CX+Math.cos(a)*o*ORX),Math.round(CY+Math.sin(a)*o*ORY),1,1);}
+    ctx.fillStyle=PAL[9]; for(const A of ASTEROIDS)for(let a=0;a<Math.PI*2;a+=9/A.orbit){ctx.fillRect(Math.round(CX+Math.cos(a)*A.orbit*ORX),Math.round(CY+Math.sin(a)*A.orbit*ORY),1,1);}   // the asteroids' paths, fainter
     const bs=this.bodies().sort((a,b)=>a.depth-b.depth);
     let sunDrawn=false;
     for(const b of bs){
       if(!sunDrawn&&b.depth>CY){drawSun(this.t);sunDrawn=true;}
-      if(b.station)drawStation(b.x,b.y,this.t); else {drawMoons(b,this.t/60,false); drawPlanet(b.pi,b.x,b.y,b.r); drawMoons(b,this.t/60,true);}
-      if(b.station){ if(allQuests().some(x=>x.s.st==='done'))txt('!',b.x,b.y-b.r-11,7,8,'center'); }
+      if(b.station)drawStation(b.x,b.y,this.t); else if(b.ast!=null)drawAsteroid(b.ast,b.x,b.y,this.t); else {drawMoons(b,this.t/60,false); drawPlanet(b.pi,b.x,b.y,b.r); drawMoons(b,this.t/60,true);}
+      if(b.ast!=null){}
+      else if(b.station){ if(allQuests().some(x=>x.s.st==='done'))txt('!',b.x,b.y-b.r-11,7,8,'center'); }
       else if(!tooDangerous(b.pi)&&allQuests().some(x=>x.pi===b.pi&&x.s.st==='active'))txtO('!',b.x,b.y-b.r-19,7,14,'center');   // a quest here, and in range
     }
     if(!sunDrawn)drawSun(this.t);
-    const sh=this.ship; spr(shipFrame(this.t),sh.x,sh.y,14,{flip:sh.flip});
+    const sh=this.ship; spr(shipFrame(this.t),sh.x,sh.y,myShip().c,{flip:sh.flip,mc1:myShip().mc});
     if(Math.hypot(sh.vx,sh.vy)>0.6&&(this.t&2))rect(sh.flip?sh.x+12:sh.x-14,sh.y,2,1,7);
     // HUD
     rect(0,0,W,13,0); rect(0,13,W,1,11);
     txt('Credits '+G.credits,4,3,7,7); txt('Ships '+G.ships,110,3,15,7);
     txt('Planets freed '+G.planets.filter(p=>p.freed>0).length+'/7',175,3,13,7); txt('Ship power '+shipPower(),290,3,14,7);
-    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
+    txt(G.coop?'2P':'1P',W-4,3,G.coop?13:11,7,'right'); txt('Powers found '+(G.pwUnlocked||[]).length+'/7',W-4,17,11,5,'right'); txt('Minerals '+(G.minerals||0),4,17,13,5); if(G.ngp)txt('NG+'+G.ngp,W-24,3,10,7,'right');
     const h=this.hover;
-    if(h){
+    if(h&&h.ast!=null){const A=ASTEROIDS[h.ast], as=G.ast[h.ast];
+      frame(8,H-38,W-16,30,A.vein[0],0); txt(A.name,16,H-33,A.vein[0],8);
+      {const t=astThreat(h.ast), sp=shipPower(), x2=G.ngp?225:175; txt('Threat '+t,110,H-32,10,7); txt('Your ship '+sp,x2,H-32,sp>=t?13:sp>=t*0.8?7:10,7);
+       if(astDanger(h.ast)&&((this.t/12|0)%2))txtO('DANGER',x2+84,H-32,2,7);}
+      txt(`Asteroid mine: four levels and a boss. No quests. ${as.freed?'Cleared x'+as.freed+'. ':''}${as.run?'Run in progress. ':''}${OKW()} to land.`,16,H-20,15,6);}
+    else if(h){
       frame(8,H-38,W-16,30,h.station?3:PLANETS[h.pi].shades[1],0);
       if(h.station){txt('Space station',16,H-33,1,8); const done=allQuests().filter(x=>x.s.st==='done').length;
         txt(`Quests and upgrades.${done?' '+done+' reward'+(done>1?'s':'')+' waiting.':''}  ${OKW()} to dock.`,16,H-20,15,6);}
@@ -2562,14 +3119,71 @@ ST.hub={
   }
 };
 
+// ---------- an asteroid mine: down the shaft to the core, back up, and the boss at the exit ----------
+const AMAP_POS=[[118,74],[150,124],[234,124],[266,74],[326,44]];
+function astImg(a){   // the asteroid cut open: rock with ore veins and the shaft through it (drawn once)
+  const key='astimg'+a; let c=texCache.get(key); if(c)return c;
+  const A=ASTEROIDS[a], w=SW, h=SH; c=document.createElement('canvas'); c.width=w; c.height=h;
+  const x=c.getContext('2d'), id=x.createImageData(w,h), d=id.data;
+  const put=(i,j,ci)=>{const o=(j*w+i)*4,rgb=PRGB[ci]; d[o]=rgb[0];d[o+1]=rgb[1];d[o+2]=rgb[2];d[o+3]=255;};
+  const cx=192, cy=112, rx=176, ry=76, path=[[96,34],AMAP_POS[0],AMAP_POS[1],[192,160],AMAP_POS[2],AMAP_POS[3],[300,50]];
+  const sd=(px,py)=>{let best=1e9; for(let k=0;k<path.length-1;k++){const [x0,y0]=path[k],[x1,y1]=path[k+1], vx=x1-x0, vy=y1-y0, t=Math.max(0,Math.min(1,((px-x0)*vx+(py-y0)*vy)/(vx*vx+vy*vy))); best=Math.min(best,Math.hypot(px-x0-vx*t,py-y0-vy*t));} return best;};
+  for(let j=0;j<h;j++)for(let i=0;i<w;i++){const an=Math.atan2(j-cy,i-cx), bump=1+0.06*Math.sin(an*5+a)+0.04*Math.sin(an*11+a*2), q=Math.hypot((i-cx)/rx,(j-cy)/ry)/bump; if(q>1)continue;
+    const bq=BAYER[(j&3)*4+(i&3)], lit=0.55-((i-cx)/rx)*0.25-((j-cy)/ry)*0.35, dd=sd(i,j);
+    if(dd<7){ if(dd>5)put(i,j,12); continue; }   // the shaft
+    let ci=bq<lit?A.rock[0]:A.rock[1]; if(q>0.95)ci=12;
+    const v=Math.sin(i*0.09+j*0.13+Math.sin(j*0.05)*2); if(v>0.97&&bq>0.3)ci=A.vein[(i>>4)&1];
+    put(i,j,ci);}
+  for(let j=-14;j<=14;j++)for(let i=-14;i<=14;i++){const q=Math.hypot(i,j)/14; if(q>1)continue; if(BAYER[((j+14)&3)*4+((i+14)&3)]<1-q)put(192+i,160+j,q<0.4?1:A.vein[0]);}   // the core
+  x.putImageData(id,0,0); texCache.set(key,c); return c;
+}
+ST.amap={
+  enter(a){ if(a!==undefined){this.a=a; stopLongTrack(); tune(TUNES.hub);}
+    const as=G.ast[this.a]; if(!as.run){as.visits++; as.run={pos:-1,done:[]}; save();}
+    this.nodes=astNodes(this.a); this.t=0; this.confirmLeave=false; },
+  update(){
+    this.t++; const as=G.ast[this.a], run=as.run, n=this.nodes[run.pos+1];
+    if(this.confirmLeave){ if(MENU.ok){as.run=null; save(); go('hub',{fromAst:this.a});} else if(MENU.back||MENU.alt)this.confirmLeave=false; return; }
+    if(MENU.ok&&n){SND.sfx('ok'); go('level',{pi:ASTEROIDS[this.a].host,node:n}); return;}
+    if(MENU.back){ if(run.pos<0){as.run=null; save(); go('hub',{fromAst:this.a});} else this.confirmLeave=true; return; }
+    if(KP.KeyM)toggleMusic();
+  },
+  tap(){ KP.Enter=true; },
+  draw(){
+    const A=ASTEROIDS[this.a], as=G.ast[this.a], run=as.run, nx=run.pos+1, sp=shipPower(), th=astThreat(this.a);
+    drawStars(0.3,this.t); ctx.drawImage(astImg(this.a),0,0);
+    txt(A.name,12,8,A.vein[0],12); txt('Asteroid mine. Two levels down, two back up, then the boss. No quests.',12,26,15,5);
+    txt('Minerals '+(G.minerals||0),W-12,8,13,6,'right'); txt('Threat '+th+'   Your ship '+sp,W-12,17,sp>=th?13:sp>=th*0.8?7:10,6,'right');
+    if(as.freed)txt('Cleared x'+as.freed,W-12,26,7,6,'right');
+    if(astDanger(this.a)&&((this.t/12|0)%2))txtO('DANGER',W-12,35,2,6,'right');
+    // arrows along the shaft: down to the core, then up
+    for(const [x,y,up] of [[134,99,0],[171,142,0],[213,142,1],[250,99,1]]){const c=(this.t>>3)&1?7:1;
+      if(up){rect(x,y,1,1,c); rect(x-1,y+1,3,1,c); rect(x-2,y+2,5,1,c);} else {rect(x-2,y,5,1,c); rect(x-1,y+1,3,1,c); rect(x,y+2,1,1,c);}}
+    this.nodes.forEach((n,i)=>{const [x,y]=AMAP_POS[i], N=NODE[n.type], done=run.done.includes(n.id), next=i===nx;
+      frame(x-14,y-12,28,25,next?((this.t/8|0)%2?7:1):done?5:11,0);
+      ctx.globalAlpha=(next||done)?1:0.45; spr(N.icon,x,y,done?11:N.c,{mc1:done?12:15}); ctx.globalAlpha=1;
+      {const c=as.vc[i]||0, t=String(c), bw=t.length*4+3; rect(x+14-bw,y+6,bw,7,0); txt(t,x+14-bw/2,y+7,c?13:11,5,'center');}   // times cleared
+      if(run.pos===n.id)spr(shipFrame(this.t),x,y-23,myShip().c,{mc1:myShip().mc});
+      if(next)hit(x-16,y-14,32,29,()=>{KP.Enter=true;});});
+    if(run.pos<0)spr(shipFrame(this.t),96,26,myShip().c,{mc1:myShip().mc});
+    const n=this.nodes[nx];
+    if(this.confirmLeave){frame(50,H-46,W-100,36,10,0); txt('Leave the asteroid? Your run so far will be lost.',W/2,H-40,1,6,'center');
+      if(TOUCH.on){frame(W/2-70,H-28,60,14,10,0);txt('Leave',W/2-40,H-25,10,6,'center');hit(W/2-72,H-30,64,18,()=>{KP.Enter=true;});
+        frame(W/2+10,H-28,60,14,5,0);txt('Stay',W/2+40,H-25,13,6,'center');hit(W/2+8,H-30,64,18,()=>{KP.Escape=true;});}
+      else txt('Fire: leave   Esc: stay',W/2,H-24,15,6,'center');}
+    else if(n){frame(8,H-44,W-16,38,NODE[n.type].c,0); txt(n.name,16,H-40,1,8); txt(n.type==='boss'?'Boss':n.vert===1?'Going down':'Going up',W-16,H-39,NODE[n.type].c,6,'right');
+      txt(n.desc,16,H-28,15,6); txt(TOUCH.on?'Tap to launch':'Fire: launch   Esc: leave the asteroid',16,H-18,11,6); hit(8,H-44,W-16,38,()=>{KP.Enter=true;});}
+  }
+};
+
 // ---------- space station ----------
 ST.station={
   enter(){this.tab=0;this.sel=0;this.t=0;this.top=0;},
   qlist(){return allQuests().filter(x=>x.s.st!=='claimed');},
   update(){
     this.t++;
-    if(MENU.left||MENU.right){this.tab^=1;this.sel=0;this.top=0;SND.sfx('sel');}
-    const n=Math.max(1,this.tab===0?this.qlist().length:SHOP.length);
+    if(MENU.left||MENU.right){this.tab=(this.tab+(MENU.left?2:1))%3;this.sel=0;this.top=0;SND.sfx('sel');}
+    const n=Math.max(1,this.tab===0?this.qlist().length:this.tab===1?SHOP.length:SHIPS.length);
     if(MENU.up){this.sel=(this.sel+n-1)%n;SND.sfx('sel');}
     if(MENU.down){this.sel=(this.sel+1)%n;SND.sfx('sel');}
     if(MENU.back){go('hub',{fromStation:true});return;}
@@ -2584,6 +3198,11 @@ ST.station={
         else {it.s.st='active'; it.s.prog=0; SND.sfx('ok'); save();}
       }
       if(MENU.alt&&it.s.st==='active'){it.s.st='open';it.s.prog=0;SND.sfx('deny');toast('Quest dropped.',80);save();}
+    } else if(this.tab===2){   // ships: buy with minerals, or fly one you own
+      const i=this.sel, S=SHIPS[i], own=(G.shipsOwned||[])[i];
+      if(MENU.ok){ if(own){ if((G.shipCol||0)!==i){G.shipCol=i; SND.sfx('ok'); toast('Flying the '+S.name+' ship. Ship power '+shipPower()+'.',100); save();} }
+        else if((G.minerals||0)<S.cost){SND.sfx('deny'); toast('Not enough minerals. Mine the asteroids between the planets.',120);}
+        else {G.minerals-=S.cost; G.shipsOwned[i]=1; G.shipCol=i; SND.sfx('coin'); toast(S.name+' ship bought. Ship power '+shipPower()+'.',120); save();} }
     } else {
       const s=SHOP[this.sel];
       if(MENU.ok){ if(!s.can()){SND.sfx('deny');toast('Already maxed out.',80);}
@@ -2595,10 +3214,11 @@ ST.station={
     drawStars(0.15,this.t);
     frame(10,8,W-20,H-16,3,0);
     txt('Space station',20,15,3,10);
-    txt('Credits '+G.credits,W-20,17,7,7,'right'); {const sp=shipPower(), s=this.tab===1&&SHOP[this.sel]; let after=null; if(s&&s.can())after=powerAfter(s);
+    txt(this.tab===2?'Minerals '+(G.minerals||0):'Credits '+G.credits,W-20,17,this.tab===2?13:7,7,'right'); {const sp=shipPower(), s=this.tab===1&&SHOP[this.sel]; let after=null; if(s&&s.can())after=powerAfter(s);
+      if(this.tab===2){const k=G.shipCol, o=G.shipsOwned, i=this.sel; G.shipsOwned=o.map((v,j)=>j===i?1:v); G.shipCol=i; after=shipPower(); G.shipCol=k; G.shipsOwned=o; if(after===sp)after=null;}
       txt('Ship power '+sp,after===null?W-100:W-128,17,14,7,'right'); if(after!==null)txt('> '+after,W-100,17,after>sp?13:after<sp?10:12,7,'right');}
-    ['Quests','Shop'].forEach((s,i)=>{const on=this.tab===i; frame(20+i*70,32,64,14,on?7:11,on?6:0); txt(s,52+i*70,36,on?1:12,7,'center'); hit(20+i*70,30,64,18,()=>{if(this.tab!==i){this.tab=i;this.sel=0;this.top=0;SND.sfx('sel');}});});
-    txt(this.tab===0?'Active '+activeCount()+'/3':'',180,37,13,6);
+    ['Quests','Shop','Ships'].forEach((s,i)=>{const on=this.tab===i; frame(20+i*70,32,64,14,on?7:11,on?6:0); txt(s,52+i*70,36,on?1:12,7,'center'); hit(20+i*70,30,64,18,()=>{if(this.tab!==i){this.tab=i;this.sel=0;this.top=0;SND.sfx('sel');}});});
+    txt(this.tab===0?'Active '+activeCount()+'/3':'',236,37,13,6);
     txt('Left/right: switch tab',W-20,37,11,6,'right');
     const y0=54;
     if(this.tab===0){
@@ -2620,7 +3240,7 @@ ST.station={
       if(TOUCH.on){ txt(!it?'':it.s.st==='done'?'Tap again to collect':it.s.st==='active'?'':'Tap again to accept',W/2,H-20,11,6,'center');
         if(it&&it.s.st==='active'){frame(W-100,H-24,80,13,10,0);txt('Drop quest',W-60,H-21,10,6,'center');hit(W-100,H-26,80,17,()=>{KP.KeyX=true;});} }
       else txt(!it?'Esc: leave':it.s.st==='done'?'Fire: collect reward   Esc: leave':it.s.st==='active'?'X: drop quest   Esc: leave':'Fire: accept quest   Esc: leave',W/2,H-20,11,6,'center');
-    } else {
+    } else if(this.tab===1){
       SHOP.forEach((s,i)=>{const y=y0+i*16, on=i===this.sel, can=s.can();
         if(on)rect(18,y-2,W-36,15,6);
         hit(18,y-2,W-36,15,()=>{if(this.sel===i)KP.Enter=true; else {this.sel=i;SND.sfx('sel');}});
@@ -2631,6 +3251,18 @@ ST.station={
         txt(can?s.cost()+' cr':s.id==='reset'?'':'max',W-24,y,can?(G.credits>=s.cost()?7:10):11,7,'right');
         if(can&&on){const g=powerAfter(s)-shipPower(); if(g>0)txt('+'+g+' power',W-70,y+1,13,6,'right');}});
       txt(TOUCH.on?'Tap an item, tap again to buy':'Fire: buy   Esc: leave',W/2,H-20,11,6,'center');
+    } else if(this.tab===2){
+      const rows=6; if(this.sel<this.top)this.top=this.sel; if(this.sel>=this.top+rows)this.top=this.sel-rows+1;
+      SHIPS.slice(this.top,this.top+rows).forEach((S,j)=>{const i=this.top+j, y=y0+j*23, on=i===this.sel, own=(G.shipsOwned||[])[i], fly=(G.shipCol||0)===i;
+        if(on)rect(18,y-2,W-36,22,6);
+        hit(18,y-2,W-36,22,()=>{if(this.sel===i)KP.Enter=true; else {this.sel=i;SND.sfx('sel');}});
+        spr(shipFrame(this.t+i*5),42,y+8,S.c,{mc1:S.mc});
+        txt(S.name+' ship',64,y,on?1:15,7); txt(S.perk,64,y+10,on?13:12,6);
+        txt(fly?'Flying':own?'Owned':S.cost+' minerals',W-24,y+2,fly?13:own?15:(G.minerals||0)>=S.cost?7:11,6,'right');});
+      if(this.top>0)txt('more above',W-24,y0-9,11,5,'right');
+      if(this.top+rows<SHIPS.length)txt('more below',W-24,y0+rows*23-4,11,5,'right');
+      txt('Each ship also gets the perks of every cheaper ship you own.',W/2,H-30,11,5,'center');
+      txt(TOUCH.on?'Tap a ship, tap again to buy or fly it':'Fire: buy or fly   Esc: leave',W/2,H-20,11,6,'center');
     }
   }
 };
@@ -2687,7 +3319,7 @@ ST.map={
       ctx.globalAlpha=(avail||done)?1:0.45; spr((MAPICONF[this.pi]||[])[n.id]??N.icon,x,y,done?11:n.sec?grottoCol(this.pi,this.t,n.id+2):N.c,{mc1:done?12:15}); ctx.globalAlpha=1;
       {const c=nodeVisits(pd,n.id), t=String(c), bw=t.length*4+3; rect(x+14-bw,y+6,bw,7,0); txt(t,x+14-bw/2,y+7,c?13:11,5,'center');}   // times cleared
       if(questsOnNode(this.pi,n.id).length&&((this.t/15|0)%2))txt('!',x+12,y-19,7,8,'center');
-      if(run.pos===n.id)spr(shipFrame(this.t),x,y-23,14);
+      if(run.pos===n.id)spr(shipFrame(this.t),x,y-23,myShip().c,{mc1:myShip().mc});
     }
     const n=ch[this.sel];
     if(this.confirmLeave){frame(50,H-46,W-100,36,10,0);txt('Leave this planet? Your route so far will be lost.',W/2,H-40,1,6,'center');
@@ -2704,7 +3336,7 @@ ST.map={
 };
 
 // ================= shoot-'em-up level =================
-const PB=H-24; // bottom of the playfield; the power-up strip sits below it
+let PB=H-24; // bottom of the playfield; the power-up strip sits below it (vertical levels change it, see vmode)
 const WEAPONS=['pulse','spread','laser','homing','wave'];
 const WNAME={pulse:'Pulse',spread:'Spread',laser:'Laser',homing:'Homing',wave:'Wave'};
 const PICKS={shield:{b:122,c:13},cash:{b:126,c:7},bomb:{b:125,c:10}};
@@ -2771,13 +3403,14 @@ const SCENE={
   w:{top:26,bot:PB-46,water:26},
   x:{top:52,bot:PB-50,floor:[22,10],ceil:[20,10]},
   g:{top:46,bot:PB-42,floor:[26,14],ceil:[24,14]},   // the secret underground caverns
+  v:{top:84,bot:300,floor:[58,20],ceil:[58,20]},       // an asteroid shaft (vertical level: across the shaft is y, 0-384)
 };
 const WATER=[[2,8,7],[9,8,7],[11,5,13],[6,14,3],[6,14,3],[6,4,10],[9,2,8]];
 // asteroids come from ROCKSETS (generated, whole, tumbling); big sets are 0-2, medium 3-5
 const rockFrame=r=>{const s=ROCKSETS[Math.floor(r()*ROCKSETS.length)]; return s[Math.floor(r()*s.length)];};
 let LV=null;
 
-function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:G.shield+2,inv:120,cool:0,w:Math.max(0,ownedWeapons().indexOf(G.weapon||'pulse')),alive:true,resp:0,bombs:G.bombsMax,flip:false,c:i?13:14,
+function makePlayer(i){return {id:i,x:50,y:i?150:100,shield:maxShield(),inv:120,cool:0,w:Math.max(0,ownedWeapons().indexOf(G.weapon||'pulse')),alive:true,resp:0,bombs:maxBombs(),flip:false,c:i?13:myShip().c,mc:i?15:myShip().mc,
   bar:-1,pw:Object.fromEntries(POWERS.map(P=>[P.id,0])),hist:[],field:0,psh:0,pshD:0,pshCool:0,trail:[],oa:0,gx:40,gy:100,mt:0,beam:0,bt:0,dt:0,at:0,wx:40,wy:100,whp:0,winv:0,wcool:0};}
 function laserLv(){return G.laserLv||(G.wep.laser?1:0);}
 function spreadLv(){return G.spreadLv||(G.wep.spread?1:0);}
@@ -2789,9 +3422,25 @@ const WLVF={spread:spreadLv,laser:laserLv,homing:homingLv,wave:waveLv};
 const WPOW={pulse:[1,1],spread:[0,1.13,1.8,2.64,3.24],laser:[0,1.61,2.15,2.88,3.8],homing:[0,1.06,1.62,2.35,3.09],wave:[0,1.37,1.73,2.67,3.08]};
 // ship power: one number for everything bought - firepower (the best weapon x Weapon power: only one fires at a time), shield, engine and bomb
 // rack. A new ship is 10, everything maxed is 100. Planet threat uses the same scale, so the two compare directly.
+// ---------- ships: bought with minerals in the station's Ships tab. Each has a small perk, and it also gets the perks of every
+// cheaper ship you own, so buying them in order makes the gold ship the best; skipping ahead is cheaper but only has its own.
+const SHIPS=[
+ {name:'Grey',  c:12,mc:15, cost:0,    perk:'No perk.',                p:{}},
+ {name:'Green', c:5, mc:13, cost:60,   perk:'5% faster.',              p:{spd:0.05}},
+ {name:'Blue',  c:6, mc:14, cost:150,  perk:'One extra shield point.', p:{shield:1}},
+ {name:'Orange',c:8, mc:7,  cost:300,  perk:'10% more damage.',        p:{dmg:0.10}},
+ {name:'Red',   c:2, mc:10, cost:500,  perk:'One extra bomb.',         p:{bomb:1}},
+ {name:'Purple',c:4, mc:14, cost:800,  perk:'10% faster firing.',      p:{rate:0.10}},
+ {name:'Gold',  c:7, mc:1,  cost:1200, perk:'15% more credits.',       p:{cr:0.15}},
+];
+const myShip=()=>SHIPS[G.shipCol||0];
+function shipPerks(k=G.shipCol||0,own=G.shipsOwned||[1]){const out={spd:0,shield:0,dmg:0,bomb:0,rate:0,cr:0};
+  for(let i=0;i<=k;i++)if(i===k||own[i])for(const q in SHIPS[i].p)out[q]+=SHIPS[i].p[q]; return out;}
+const maxShield=()=>G.shield+2+shipPerks().shield, maxBombs=()=>G.bombsMax+shipPerks().bomb;
 function shipPower(){
   const pw=G.power, fire=Math.max(...ownedWeapons().map(w=>WPOW[w][w==='pulse'?1:WLVF[w]()]||1))*(1+(pw-1)*0.2)/((11-Math.ceil(pw/2))/10);   // the best weapon you can fire, at your Weapon power
-  return Math.min(100,Math.round(10*Math.pow(fire,0.62)*Math.pow(G.shield,0.4)*Math.pow((0.65+G.engine*0.12)/0.77,0.6)*Math.pow(G.bombsMax,0.1)));
+  const pk=shipPerks();   // the ship you fly counts too
+  return Math.min(100,Math.round(10*Math.pow(fire*(1+pk.dmg)*(1+pk.rate),0.62)*Math.pow(G.shield+pk.shield,0.4)*Math.pow((0.65+G.engine*0.12)*(1+pk.spd)/0.77,0.6)*Math.pow(G.bombsMax+pk.bomb,0.1)));
 }
 const THREAT=[10,17,27,38,50,63,78];   // by planet difficulty 1-7 (Rust .. Ignis): a little above a steady optimal build, since real builds lag it
 function planetThreat(pi){return Math.round(THREAT[PLANETS[pi].diff-1]*(1+0.6*(G.ngp||0)));}
@@ -2812,7 +3461,7 @@ function terrH(L,wx,bs,k){
 }
 function floorH(L,wx){const c=SCENE[L.sc]; if(c.water)return c.water; return c.floor?terrH(L,wx,c.floor,0):0;}
 function ceilH(L,wx){const c=SCENE[L.sc]; return c.ceil?terrH(L,wx,c.ceil,1):0;}
-const floorY=(L,x)=>PB-floorH(L,L.wx+x), ceilY=(L,x)=>13+ceilH(L,L.wx+x);
+const floorY=(L,x)=>PB-floorH(L,L.wx+x), ceilY=(L,x)=>TOPY+ceilH(L,L.wx+x);
 function terrainHit(L,x,y,r){const c=SCENE[L.sc]; if((c.floor||c.water)&&y+r>floorY(L,x))return true; if(c.ceil&&y-r<ceilY(L,x))return true; return false;}
 // damage an island rock if (x,y) touches one; returns true if something solid was hit
 function shootSolid(L,x,y,r,dmg){
@@ -2826,7 +3475,7 @@ function shootSolid(L,x,y,r,dmg){
 function hurtPiece(L,s,p,dmg){
   p.hp-=dmg; p.flash=4;
   if(p.hp<=0&&!p.gone){p.gone=true; s.pieces.splice(s.pieces.indexOf(p),1); boom(L,s.x+p.ox,s.y+p.oy,false);
-    const g=1; G.credits+=g; L.earned+=g; questEvent('rock',L.pi,L.node.id);
+    const g=1; G.credits+=g; L.earned+=g; if(L.ast==null)questEvent('rock',L.pi,L.node.id);
     if(!s.pieces.length)s.dead=true;}
 }
 function solidHit(L,x,y,r){
@@ -2864,15 +3513,17 @@ function glowImg(pi){
 
 // ---------- building a level ----------
 function buildLevel(pi,node){
-  const NG=G.ngp||0, P=PLANETS[pi], d=P.diff+NG*2, r=mulberry(pi*7919+node.id*104729+G.planets[pi].visits*31+tickCount);
-  const sc=node.sec?'g':SCENES[pi][node.id];
-  const L={pi,node,type:node.type,d,r,t:0,sm:1+NG*0.3,ng:NG,ease:NG?1:[1,1,1,1,1,0.85,0.72][pi], bspd:NG?1:[1,1,1,1,0.9,0.9,1][pi],   // enemy bullet speed per planet
+  const A=node.ast!=null?ASTEROIDS[node.ast]:null;   // an asteroid mine: pi is the planet whose ships and art it borrows
+  const NG=G.ngp||0, P=PLANETS[pi], d=(A?A.diff:P.diff)+NG*2, r=mulberry(pi*7919+node.id*104729+(A?G.ast[node.ast].visits*31+node.ast*5557:G.planets[pi].visits*31)+tickCount);
+  const sc=A?'v':node.sec?'g':SCENES[pi][node.id];
+  const L={pi,node,type:node.type,d,r,t:0,sm:1+NG*0.3,ng:NG,ease:A?0.85:NG?1:[1,1,1,1,1,0.85,0.72][pi], bspd:A||NG?1:[1,1,1,1,0.9,0.9,1][pi],   // enemy bullet speed per planet
+    ast:A?node.ast:null, vert:node.vert||0,
        // early planets are gentler
     sc,ts:r()*10,wx:0,yTop:SCENE[sc].top,yBot:SCENE[sc].bot,
-    ev:[],en:[],eb:[],pb:[],pk:[],fx:[],so:[],forms:{},fid:0,boss:null,scroll:(1.3+d*0.12)*(1+NG*0.4),
-    pool:planetPool(pi),earned:0,state:'play',endT:0,pause:false,shake:0,flash:0,bossDue:-1};
+    ev:[],en:[],eb:[],pb:[],pk:[],fx:[],so:[],forms:{},fid:0,boss:null,scroll:(1.3+d*0.12)*(1+NG*0.4)*(A?0.7:1),
+    pool:A?planetPool(A.pools[0]).concat(planetPool(A.pools[1])):planetPool(pi),earned:0,state:'play',endT:0,pause:false,shake:0,flash:0,bossDue:-1};
   // one enemy type per level until the fourth stage; the fourth stage mixes up to three
-  const stage=node.sec?3:node.id===0?0:node.id<=2?1:node.id<=6?2:node.id<=10?3:4;   // the caverns mix the planet's own ships
+  const stage=A||node.sec?3:node.id===0?0:node.id<=2?1:node.id<=6?2:node.id<=10?3:4;   // the caverns mix the planet's own ships
   if(stage===3){const r2=mulberry(pi*31+node.id*7); const p=L.pool.slice(); const mix=[]; while(mix.length<3&&p.length)mix.push(p.splice(Math.floor(r2()*p.length),1)[0]); L.wavePool=mix;}
   else L.wavePool=[stage===4?L.pool[0]:L.pool[(node.id*2+pi)%L.pool.length]];
   const lenS={assault:48,asteroids:42,ambush:46,elite:34,cache:24,boss:6}[node.type]||40;
@@ -2893,7 +3544,7 @@ function buildLevel(pi,node){
   while(t2<L.len){
     if(sc==='i'){L.ev.push({t:t2,kind:'island',cannon:r()<0.35+d*0.05}); t2+=140+r()*120;}
     else if(sc==='o'){ if(r()<0.5)L.ev.push({t:t2,kind:'island',cannon:r()<0.3}); else L.ev.push({t:t2,kind:'rocks',n:1+Math.floor(r()*2)}); t2+=200+r()*160;}
-    else if(sc==='f'||sc==='c'||sc==='x'||sc==='g'){L.ev.push({t:t2,kind:'cannon',side:(sc==='f'||r()<0.55)?'up':'down'}); if(sc==='x'&&r()<0.55)L.ev.push({t:t2+60,kind:'pillar',top:r()<0.5}); t2+=(110+r()*120)/(1+NG*0.2);}
+    else if(sc==='f'||sc==='c'||sc==='x'||sc==='g'||sc==='v'){L.ev.push({t:t2,kind:'cannon',side:(sc==='f'||r()<0.55)?'up':'down'}); if(sc==='x'&&r()<0.55)L.ev.push({t:t2+60,kind:'pillar',top:r()<0.5}); t2+=(110+r()*120)/(1+NG*0.2);}
     else if(sc==='w'){L.ev.push({t:t2,kind:'jump',n:2+Math.floor(r()*3)}); t2+=170+r()*140;}
     else break;
   }
@@ -2903,19 +3554,20 @@ function buildLevel(pi,node){
   if('sio'.includes(sc))for(let k=0;k<1+Math.floor(d/3);k++)L.ev.push({t:300+r()*Math.max(100,L.len-400),kind:'meteors',n:3+Math.floor(r()*3)});
   if(sc==='s')for(let k=0;k<3;k++)L.ev.push({t:200+r()*Math.max(100,L.len-300),kind:'rocks',n:1+Math.floor(r()*2)});
   if(node.type==='boss'||node.type==='elite')L.bossDue=L.len;
-  const sec=SECRET[pi]; const secret=sec&&sec.node===node.id&&!(G.pwUnlocked||[]).includes(sec.pw);
+  if(sc==='v'){let t3=90; while(t3<L.len){L.ev.push({t:t3,kind:'ore',side:r()<0.5?'up':'down'}); t3+=55+r()*70;}}   // mineral deposits in the shaft walls
+  const sec=SECRET[pi]; const secret=!A&&sec&&sec.node===node.id&&!(G.pwUnlocked||[]).includes(sec.pw);
   if(secret)L.ev.push({t:Math.round(L.len*0.5),kind:'mini',secret:sec.pw});
   else if(node.type!=='boss'&&node.type!=='elite'&&r()<0.85)L.ev.push({t:Math.round(L.len*(0.45+r()*0.15)),kind:'mini'}); // a mini-boss in most stages
   L.ev.sort((a,b)=>a.t-b.t);
   L.sky=skyFor(pi,node,sc); L.skyImg=makeSky(L.sky,pi*7717+node.id*31);
   if(L.sky.endsWith('band')){L.bord={kind:L.sky,h:14}; L.yTop+=16; L.yBot-=16;}
   L.pl=[makePlayer(0)]; if(G.coop)L.pl.push(makePlayer(1));
-  const run=G.planets[pi].run; // powers carry along the route until the guardian
+  const run=A?G.ast[node.ast].run:G.planets[pi].run; // powers carry along the route until the guardian
   if(run&&run.pw)for(const p of L.pl){const s=run.pw[p.id]; if(s){Object.assign(p.pw,s.pw); p.bar=s.bar; p.hist=s.hist?s.hist.slice():POWERS.flatMap(P=>P.id==='nova'?[]:Array(p.pw[P.id]||0).fill(P.id)); p.field=p.pw.field; p.whp=p.pw.wing?wingMax(p):0; p.gx=p.x; p.gy=p.y; p.wx=p.x-20; p.wy=p.y+30;}}
-  L.podTick=0; L.arcs=[]; L.R=shipPower()/planetThreat(pi); L.danger=L.R<0.8; L.heat=0;
+  L.podTick=0; L.arcs=[]; L.R=shipPower()/(A?astThreat(node.ast):planetThreat(pi)); L.danger=L.R<0.8; L.heat=0;
   // surge: extra reinforcement levels while you dominate (no cap); it builds while you mow them down untouched,
   // falls when you are hit, and 60% of it carries on to the next stage of the run
-  {const run=G.planets[pi].run; L.surge=((run&&run.surge)||0)*0.6; L.kEMA=0.5; L.lastHitT=-1e9; L.heat=heatLevel(L,heatOf(L)); L.heatMax=0;}
+  {const run=A?G.ast[node.ast].run:G.planets[pi].run; L.surge=((run&&run.surge)||0)*0.6; L.kEMA=0.5; L.lastHitT=-1e9; L.heat=heatLevel(L,heatOf(L)); L.heatMax=0;}
   for(const p of L.pl)p.y=(L.yTop+L.yBot)/2+(p.id?20:0);
   return L;
 }
@@ -2947,6 +3599,11 @@ function spawnMeteor(L,delay){
   const r=L.r, set=ROCKSETS[3+Math.floor(r()*3)]; L.en.push({rock:true,meteor:true,pat:'meteor',rfr:set,rph:0,b:set[0],c:8,x:W*0.35+r()*W*0.75,y:-30,
     vx:-(1.6+r()*1.2)*L.sm,vy:(1.7+r()*1)*L.sm,t:0,delay,hp:5+L.d*0.6,val:12,flash:0,rad:8,fc:1e9,ex:true});
 }
+// a mineral deposit set in the shaft wall: shoot it and it breaks into minerals to pick up
+function makeOre(L,side){return {ore:true,pat:'ore',type:'ore',side,x:W+14,y:0,t:0,delay:0,hp:2+L.d*0.5,val:0,rad:8,fc:1e9,flash:0,ex:true,chunks:2+Math.floor(L.d/2),hs:ihash(L.t*7+L.fid)};}
+function drawOre(L,e){const A=ASTEROIDS[L.ast], up=e.side==='up', s=up?-1:1, hl=e.flash>2;
+  for(let q=0;q<4;q++){const hh=5+((e.hs>>>(q*3))%7), x=e.x-6+q*4, c=hl?1:A.vein[q%2]; rect(x,up?e.y-hh:e.y,3,hh,c); rect(x,up?e.y-hh:e.y+hh-1,1,1,1);}
+  if(((L.t>>2)+e.hs)%30<3)rect(e.x-1,e.y+s*6,3,1,1);}
 function makeCannon(L,side,host,ox,oy){
   return {cannon:true,pat:'cannon',type:'cannon',side,host,ox,oy,x:host?host.x+ox:W+12,y:0,t:0,delay:0,hp:3+L.d*0.6,val:14,
     fc:60+L.r()*120,flash:0,rad:7,ang:side==='up'?-Math.PI/2:Math.PI/2,ex:true};
@@ -2991,12 +3648,12 @@ function boom(L,x,y,big){L.fx.push({x,y,t:0,big}); SND.sfx(big?'big':'boom'); if
 
 function makeBoss(L,mini){
   const r=L.r, P=PLANETS[L.pi], d=L.d;
-  const art=mini?GUNART:BOSSART[L.pi], cols=art.cw, rows=art.ch;
+  const ab=!mini&&L.ast!=null, art=mini?GUNART:ab?ABOSSART[L.ast]:BOSSART[L.pi], cols=art.cw, rows=art.ch;
   const place=q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}), cells=art.cells.map(place), ov=(art.ov||[]).map(place);
   const w=cols*24,h=rows*21;
   const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,ov,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
-    c:(!mini&&BOSSDESIGN[L.pi].col)||(P.shades[1]===1?14:P.shades[1]),vuln:false,flash:0,turrets:[],core:art.core};
-  B.hp*=lvBig(L.heat)*(!mini&&L.pi===5?1.35:1); B.maxhp=B.hp;   // the Prism Queen was the softest guardian
+    c:ab?ABOSSDESIGN[L.ast].col:(!mini&&BOSSDESIGN[L.pi].col)||(P.shades[1]===1?14:P.shades[1]),vuln:false,flash:0,turrets:[],core:art.core};
+  B.hp*=lvBig(L.heat)*(!mini&&!ab&&L.pi===5?1.35:1); B.maxhp=B.hp;   // the Prism Queen was the softest guardian
   const tpos=art.tur;
   const pool=NEW_BY_PLANET[L.pi];
   for(const [ox,oy] of tpos){
@@ -3046,6 +3703,7 @@ function fireWeapon(L,p){
   if(p.pw.spray){const n=[0,1,2,3,5][p.pw.spray]; for(let i=0;i<n;i++){const a=(L.r()-0.5)*1.3, s=5+L.r()*2.5; shot({kind:'spray',vx:Math.cos(a)*s,vy:Math.sin(a)*s,dmg:0.5,col:SPRAYC[Math.floor(L.r()*SPRAYC.length)],r:2});}}
   for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); shot({x:o.x+8,y:o.y,vx:7.5,dmg:0.7});}
   if(p.pw.pierce){const m=[1,0.9,1,1.15,1.3][p.pw.pierce]; for(let i=start;i<L.pb.length;i++){L.pb[i].pierce=true;L.pb[i].dmg*=m;L.pb[i].pst=p.pw.pierce;}}
+  {const pk=shipPerks(); if(pk.dmg)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=1+pk.dmg; if(pk.rate)p.cool=Math.max(2,Math.round(p.cool/(1+pk.rate)));}   // the ship's perks
   SND.sfx(ownedWeapons()[p.w]==='laser'?'beam':'shot');
 }
 function blast(L,x,y,rad,dmg){
@@ -3115,7 +3773,7 @@ function spendShieldDot(p){
   SND.sfx('sel'); toast('Power shield used a dot: '+POWERS.find(P=>P.id===id).name+(p.pw[id]?' down to stage '+p.pw[id]:' gone'),110);
 }
 // what each player takes into the next stage (a ship lost wipes everything but speed)
-function storeCarry(L){const run=G.planets[L.pi].run; if(!run)return;
+function storeCarry(L){const run=runOf(L); if(!run)return;
   run.pw=L.pl.map(p=>({pw:{...p.pw},bar:p.bar,field:p.field,whp:p.whp,hist:(p.hist||[]).slice()}));}
 function loseDot(p){ // the most recently gained stage is lost, but speed always stays
   const h=p.hist||[];
@@ -3140,10 +3798,11 @@ function hurtPlayer(L,p){
 function killEnemy(L,e){
   e.dead=true; boom(L,e.x,e.y,!!e.mini); if(e.fid)L.kEMA=L.kEMA*0.92+0.08;   // share of formation ships you shoot down
   if(e.secret)unlockPower(L,e.secret,e.x,e.y);
+  if(e.ore){for(let k=0;k<e.chunks;k++)L.pk.push({kind:'ore',x:e.x,y:e.y,vx:-0.3-L.r()*0.6,vy:(e.side==='up'?-1:1)*(0.6+L.r()*1.2),t:0}); return;}
   if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
   // kills pay 5% more per reinforcement level; on a DANGER planet they pay less the more outmatched you are, so dying there isn't a way to farm
-  const cr=e.val*(0.08+L.d*0.025)*(L.danger?(L.R/0.8)**2:1+Math.max(0,L.heat)*0.05), gain=L.danger?Math.floor(cr+L.r()):Math.max(1,Math.round(cr)); G.credits+=gain; L.earned+=gain; G.stats.kills++;
-  questEvent(e.rock?'rock':'kill',L.pi,L.node.id,{rf:!!e.rf});
+  const cr=e.val*(0.08+L.d*0.025)*(L.danger?(L.R/0.8)**2:1+Math.max(0,L.heat)*0.05)*(1+shipPerks().cr), gain=L.danger?Math.floor(cr+L.r()):Math.max(1,Math.round(cr)); G.credits+=gain; L.earned+=gain; G.stats.kills++;
+  if(L.ast==null)questEvent(e.rock?'rock':'kill',L.pi,L.node.id,{rf:!!e.rf});   // no quests in the asteroids
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
   if(e.cannon&&L.r()<0.2)podChance(L,e.x,e.y);
   const beh=e.T&&e.T.beh;
@@ -3193,6 +3852,7 @@ function updateEnemy(L,e){
     case 'jump': e.x+=e.vx; e.y+=e.vy; e.vy+=0.1;
       if(e.t===1)L.fx.push({x:e.x,y:e.wy,t:0,splash:true});
       if(e.vy>0&&e.y>e.wy+6){e.dead=true; L.fx.push({x:e.x,y:e.wy,t:0,splash:true});} break;
+    case 'ore': e.x-=L.scroll; e.y=e.side==='up'?floorY(L,e.x)-2:ceilY(L,e.x)+2; if(e.x<-30)e.dead=true; return;
     case 'cannon': {
       if(e.host){ if(e.host.dead||e.host.x<-60){e.dead=true;return;} e.x=e.host.x+e.ox; e.y=e.host.y+e.oy; }
       else { e.x-=L.scroll; e.y=e.side==='up'?floorY(L,e.x)-1:ceilY(L,e.x)+1; }
@@ -3218,20 +3878,26 @@ function updateEnemy(L,e){
 function updateBoss(L){
   const B=L.boss; if(!B)return; B.t++; if(B.flash)B.flash--;
   if(B.dead){B.deathT++; if(B.deathT%6===0){boom(L,B.x+(L.r()-0.5)*B.w,B.y+(L.r()-0.5)*B.h,B.deathT%24===0);} if(B.deathT>100){L.boss=null;} return;}
-  if(B.x>B.tx)B.x-=1.2; else B.x=B.tx+Math.sin(B.t*0.008)*14;
+  if(B.lunge>0){B.lunge--; B.x=B.tx-Math.sin((80-B.lunge)/80*Math.PI)*50;}   // the Drill Worm's charge
+  else if(B.x>B.tx)B.x-=1.2; else B.x=B.tx+Math.sin(B.t*0.008)*14;
   const mid=(L.yTop+L.yBot)/2, range=Math.max(0,(L.yBot-L.yTop)/2-B.h/2+8);
   B.y=mid+Math.sin(B.t*0.011)*range;
   B.vuln=B.turrets.every(t=>t.dead);
   B.atk--; if(B.atk<=0&&B.x<W-20){
-    const d=L.d, kind=pick(L.r,B.vuln?['aim','ring','fan','minions','ring']:['aim','fan','minions']);
+    const d=L.d, kind=pick(L.r,(B.vuln?['aim','ring','fan','minions','ring']:['aim','fan','minions']).concat(L.ast!=null&&!B.mini?['spec','spec']:[]));
     const cx=B.x+B.core[0], cy=B.y+B.core[1];
     if(kind==='aim'){const n=3+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.6+d*0.12+i*0.35);}
     if(kind==='ring'){const n=10+d*2; for(let i=0;i<n;i++){const a=i/n*TAU+B.t; ebPush(L,{x:B.x,y:B.y,vx:Math.cos(a)*1.6*L.sm,vy:Math.sin(a)*1.6*L.sm,t:0});}}
     if(kind==='fan'){const n=5+Math.floor(d/2); for(let i=0;i<n;i++)aimShot(L,cx,cy,1.9+d*0.1,(i-(n-1)/2)*0.16);}
+    if(kind==='spec'){const a=L.ast;   // the asteroid bosses' own moves
+      if(a===0)for(let k=0;k<3;k++){spawnRock(L); const q=L.en[L.en.length-1]; q.x=B.x-B.w/2; q.y=clamp(B.y+(k-1)*34,L.yTop+8,L.yBot-8); q.vx=-(1.3+L.r()*0.6)*L.sm;}   // the Crusher throws rocks
+      else if(a===1)B.lunge=80;   // the Worm charges
+      else if(a===2)for(const sd of[-1,1]){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:3,elite:false}); for(const e of L.en.slice(-3)){e.x=B.x-B.w/2; e.y0=clamp(B.y+sd*44,L.yTop+e.amp,L.yBot-e.amp);}}   // the Hauler launches escorts
+      else for(let q=0;q<2;q++){const n=12+d; for(let i=0;i<n;i++){const an=i/n*TAU+q*0.13+B.t, sp=(1.3+q*0.5)*L.sm; ebPush(L,{x:B.x+B.core[0],y:B.y+B.core[1],vx:Math.cos(an)*sp,vy:Math.sin(an)*sp,t:0});}}}   // the Guardian: two rings
     if(kind==='minions'){spawnForm(L,{pat:'sine',e:pick(L.r,L.wavePool),n:4,elite:false}); for(const e of L.en.slice(-4)){e.x=B.x-B.w/2;e.y0=clamp(B.y,L.yTop+e.amp,L.yBot-e.amp);}}
     B.atk=((B.mini?130:110)-d*6+L.r()*60)/(1+L.ng*0.3)/lvBig(L.heat)*(!B.mini&&L.pi===5?0.8:1);
   }
-  if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=(B.mini?30:80)*L.d; G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
+  if(B.hp<=0){B.dead=true;B.deathT=0; SND.sfx('big'); const gain=Math.round((B.mini?30:80)*L.d); G.credits+=gain; L.earned+=gain; for(const t of B.turrets)t.dead=true;}
 }
 
 // ---------- drawing the scene ----------
@@ -3244,6 +3910,7 @@ function drawBack(L){
     rect(0,59,W,1,11); rect(0,PB-50,W,1,11); return;
   }
   if(sc==='g'){drawGrotto(L); return;}
+  if(sc==='v'){drawShaft(L); return;}
   drawSky(L);
   drawStars(L.pause?0:L.scroll,L.t);
   if(sc==='o')drawPlanet(L.pi,W*0.8-L.t*0.025,PB+70,110,true);
@@ -3251,11 +3918,11 @@ function drawBack(L){
   if(sc==='w')ctx.drawImage(glowImg(L.pi),0,PB-26-56);
 }
 function drawTerrain(L){
-  const c=SCENE[L.sc], sh=PLANETS[L.pi].shades, edge=sh[2]===1?sh[1]:sh[2], struct=L.sc==='x', rust=L.pi===6, gro=L.sc==='g'?GROTTO[L.pi]:null;
+  const c=SCENE[L.sc], shaft=L.sc==='v'?ASTEROIDS[L.ast]:null, sh=shaft?[shaft.rock[0],shaft.rock[1],12]:PLANETS[L.pi].shades, edge=shaft?12:sh[2]===1?sh[1]:sh[2], struct=L.sc==='x', rust=L.pi===6&&!shaft, gro=L.sc==='g'?GROTTO[L.pi]:null;
   const gEdge=wx=>gro.crys[(((Math.floor(wx/12)+(L.t>>3))%gro.crys.length)+gro.crys.length)%gro.crys.length];   // a shimmer runs along the cavern walls
-  if(c.ceil){const T=gro?tex('vein',gro.wall):struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
-    for(let x=0;x<W;x+=2){const wx=L.wx+x, h=Math.round(ceilH(L,wx)), sx=(((Math.floor(wx)%64)+64)%64)&62; ctx.drawImage(T,sx,0,2,Math.min(96,h),x,13,2,h); rect(x,13+h-1,2,1,gro?gEdge(wx):struct?15:edge); if(gro)rect(x,13+h-2,2,1,gEdge(wx+36));}}
-  if(c.floor||c.water){const isW=!!c.water, T=isW?tex('water',WATER[L.pi]):gro?tex('vein',gro.wall):struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
+  if(c.ceil){const T=shaft?tex('vein',[shaft.rock[0],shaft.rock[1],shaft.vein[0],shaft.vein[1]]):gro?tex('vein',gro.wall):struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
+    for(let x=0;x<W;x+=2){const wx=L.wx+x, h=Math.round(ceilH(L,wx)), sx=(((Math.floor(wx)%64)+64)%64)&62; ctx.drawImage(T,sx,0,2,Math.min(96,h),x,TOPY,2,h); rect(x,TOPY+h-1,2,1,gro?gEdge(wx):struct?15:edge); if(gro)rect(x,TOPY+h-2,2,1,gEdge(wx+36));}}
+  if(c.floor||c.water){const isW=!!c.water, T=isW?tex('water',WATER[L.pi]):shaft?tex('vein',[shaft.rock[0],shaft.rock[1],shaft.vein[0],shaft.vein[1]]):gro?tex('vein',gro.wall):struct?tex('metal',[11,12,15]):tex('rock',[sh[0],sh[1]]);
     for(let x=0;x<W;x+=2){const wx=L.wx+x; let h=floorH(L,wx); if(isW)h+=Math.sin(wx*0.07+L.t*0.08)*1.5+Math.sin(wx*0.19-L.t*0.05); h=Math.round(h);
       const sx=(((Math.floor(wx)%64)+64)%64)&62; ctx.drawImage(T,sx,isW?((L.t>>2)%40):0,2,Math.min(56,h),x,PB-h,2,h);
       rect(x,PB-h,2,1,isW?WATER[L.pi][2]:gro?gEdge(wx):struct?15:edge); if(gro)rect(x,PB-h+1,2,1,gEdge(wx+36));
@@ -3309,7 +3976,7 @@ function drawPowerBar(L){
   const x=300, ws=ownedWeapons();
   L.pl.forEach((p,i)=>{const y=PB+2+i*7;
     {const wn=ws[Math.min(p.w,ws.length-1)]; txt((L.pl.length>1?(i?'2 ':'1 '):'')+WNAME[wn]+(WLVF[wn]?' '+WLVF[wn]():''),x,y,p.c,5);}
-    for(let s=0;s<G.shield+2;s++)rect(x+40+s*4,y+2,3,3,s<p.shield?13:11);
+    for(let s=0;s<maxShield();s++)rect(x+40+s*4,y+2,3,3,s<p.shield?13:11);
     txt('B'+p.bombs,W-3,y,10,5,'right');});
   const cur=p0&&p0.bar>=0?POWERS[p0.bar]:null, lvl=cur?p0.pw[cur.id]:0, mx=cur&&cur.id!=='nova'&&lvl>=cur.max;
   // auto fire (RT) is marked in the corner; with two players the power line gives up its stage count if it needs the room
@@ -3321,12 +3988,13 @@ function drawPowerBar(L){
   if(cur&&!mx&&L.pl.length===1)txt(TOUCH.on?'Tap Power':PADON?PADNAME[PAD.pw[0]]+' to take':'V to take',x,PB+18,11,4);
 }
 ST.level={
-  enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; if(ownedWeapons().length>1)toast('Weapon: '+WNAME[ownedWeapons()[LV.pl[0].w]]+'   ('+(TOUCH.on?'tap Weapon':'X')+' to switch)',200); if(G.newPw){const P=POWERS.find(q=>q.id===G.newPw); toast('New power '+P.label+' is at the end of your strip. Collect pods to reach it.',260);} {const p=LV.pl[0], c=POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label); if(c.length)toast('Powers carried in: '+POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label+(P.max>1?' '+p.pw[P.id]:'')).join('  '),240);} this.a=a; tune(TUNES.level);},
-  update(){
+  enter(a){if(a.node.vert)vmode(1); try{LV=buildLevel(a.pi,a.node);}finally{vmode(0);} LV.intro=200; if(ownedWeapons().length>1)toast('Weapon: '+WNAME[ownedWeapons()[LV.pl[0].w]]+'   ('+(TOUCH.on?'tap Weapon':'X')+' to switch)',200); if(G.newPw){const P=POWERS.find(q=>q.id===G.newPw); toast('New power '+P.label+' is at the end of your strip. Collect pods to reach it.',260);} {const p=LV.pl[0], c=POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label); if(c.length)toast('Powers carried in: '+POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label+(P.max>1?' '+p.pw[P.id]:'')).join('  '),240);} this.a=a; tune(TUNES.level);},
+  update(){const L=LV; if(L&&L.vert){vmode(1); try{this.step();}finally{vmode(0);}} else this.step();},
+  step(){
     const L=LV; if(!L)return;
     if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; L.psel=0; SND.sfx('sel');}
     if(L.pause){ if(MENU.left||MENU.right){L.psel=L.psel?0:1; SND.sfx('sel');}
-      const pick=CT[0].fireP||CT[1].fireP; if(KP.KeyQ||(pick&&L.psel)){go('map');} else if(pick){L.pause=false; SND.sfx('sel');} return; }
+      const pick=CT[0].fireP||CT[1].fireP; if(KP.KeyQ||(pick&&L.psel)){if(L.ast!=null)go('amap',L.ast); else go('map');} else if(pick){L.pause=false; SND.sfx('sel');} return; }
     for(let i=0;i<L.pl.length;i++)if(CT[i].autoP)toggleAuto(i,L.pl.length>1);
     if(KP.KeyM)toggleMusic();
     // reinforcements only arrive in the main part of a stage (not once its time is up, not during a boss fight),
@@ -3350,6 +4018,7 @@ ST.level={
       else if(ev.kind==='meteors'){for(let i=0;i<Math.max(1,ev.n+Math.round(Math.min(0,L.heat)*0.5));i++)spawnMeteor(L,i*18);}
       else if(ev.kind==='island')spawnIsland(L,ev.cannon);
       else if(ev.kind==='cannon')L.en.push(makeCannon(L,ev.side,null,0,0));
+      else if(ev.kind==='ore')L.en.push(makeOre(L,ev.side));
       else if(ev.kind==='pillar')spawnPillar(L,ev.top);
       else if(ev.kind==='jump')spawnJumpers(L,ev.n);
       else if(ev.kind==='mini')spawnMini(L,ev.secret);
@@ -3361,15 +4030,16 @@ ST.level={
       const c=CT[p.id], td=TOUCH.drag[p.id];
       if(!p.alive){ if(p.resp>0&&--p.resp===0){const keep={pw:p.pw,bar:p.bar,hist:p.hist}; Object.assign(p,makePlayer(p.id),{x:40,y:(L.yTop+L.yBot)/2},keep); p.inv=0; p.rsh=240; for(const b of L.eb)if(dist2(b.x,b.y,p.x,p.y)<90*90)b.dead=true; p.field=p.pw.field; p.whp=p.pw.wing?wingMax(p):0; p.gx=p.x; p.gy=p.y; p.wx=p.x-20; p.wy=p.y+30;} continue; }
       // slow to start: Speed up pods (and the Engine upgrade) make the real difference
-      const sp=(0.65+G.engine*0.12+p.pw.speed*0.5)*(1+L.ng*0.12);
+      const sp=(0.65+G.engine*0.12+p.pw.speed*0.5)*(1+L.ng*0.12)*(1+shipPerks().spd);
       // touch drags are capped to the same top speed, so speed-ups matter on touch too
-      p.tdx=clamp((p.tdx||0)+td.dx*1.3,-40,40); p.tdy=clamp((p.tdy||0)+td.dy*1.3,-40,40);
+      const [cx,cy]=vIn(L,c.x,c.y), [tdx,tdy]=vIn(L,td.dx,td.dy);   // the controls turn with a vertical level
+      p.tdx=clamp((p.tdx||0)+tdx*1.3,-40,40); p.tdy=clamp((p.tdy||0)+tdy*1.3,-40,40);
       const cap=sp*1.8, mx=clamp(p.tdx,-cap,cap), my=clamp(p.tdy,-cap,cap); p.tdx-=mx; p.tdy-=my;
-      p.x=clamp(p.x+c.x*sp+mx,12,W-14); p.y=clamp(p.y+c.y*sp+my,22,PB-10);
+      p.x=clamp(p.x+cx*sp+mx,12,W-14); p.y=clamp(p.y+cy*sp+my,TOPY+9,PB-10);
       const sc=SCENE[L.sc];
       if((sc.floor||sc.water)&&p.y>floorY(L,p.x)-7){p.y=floorY(L,p.x)-7; hurtPlayer(L,p);}
       if(sc.ceil&&p.y<ceilY(L,p.x)+7){p.y=ceilY(L,p.x)+7; hurtPlayer(L,p);}
-      if(L.bord){const lim=L.bord.h+8; if(p.y<13+lim){p.y=13+lim; hurtPlayer(L,p);} if(p.y>PB-lim){p.y=PB-lim; hurtPlayer(L,p);}}
+      if(L.bord){const lim=L.bord.h+8; if(p.y<TOPY+lim){p.y=TOPY+lim; hurtPlayer(L,p);} if(p.y>PB-lim){p.y=PB-lim; hurtPlayer(L,p);}}
       if(solidHit(L,p.x,p.y,4)){hurtPlayer(L,p); p.x=Math.max(12,p.x-2);}
       p.trail.push({x:p.x,y:p.y}); if(p.trail.length>60)p.trail.shift();
       if(p.inv)p.inv--; if(p.cool)p.cool--;
@@ -3444,35 +4114,39 @@ ST.level={
         b.dead=true; if(B.vuln){B.hp-=b.dmg;B.flash=3;} else {SND.sfx('clink'); L.fx.push({x:b.x,y:b.y,t:0,spark:true});}}
     }
     for(const p of L.pl){ if(!p.alive)continue;
-      for(const e of L.en){ if(e.dead||e.delay>0)continue; const rr=e.rad*0.8+5; if(dist2(p.x,p.y,e.x,e.y)<rr*rr){hurtPlayer(L,p); if(!e.turret&&!e.cannon)damageEnemy(L,e,3);} }
+      for(const e of L.en){ if(e.dead||e.delay>0||e.ore)continue; const rr=e.rad*0.8+5; if(dist2(p.x,p.y,e.x,e.y)<rr*rr){hurtPlayer(L,p); if(!e.turret&&!e.cannon)damageEnemy(L,e,3);} }
       for(const b of L.eb){ if(!b.dead&&dist2(p.x,p.y,b.x,b.y)<30){b.dead=true;hurtPlayer(L,p);} }
       const B=L.boss; if(B&&!B.dead&&Math.abs(p.x-B.x)<B.w/2+6&&Math.abs(p.y-B.y)<B.h/2+4)hurtPlayer(L,p);
       for(const k of L.pk){ if(!k.dead&&dist2(p.x,p.y,k.x,k.y)<200){k.dead=true;SND.sfx('pick');
-        if(k.kind==='shield'){p.shield=Math.min(G.shield+2,p.shield+1); L.fx.push({x:k.x,y:k.y,t:0,text:'+1 SHIELD',c:13});}
-        if(k.kind==='cash'){const g=Math.max(1,Math.round(3*L.d*(L.danger?(L.R/0.8)**2:1)));G.credits+=g;L.earned+=g; L.fx.push({x:k.x,y:k.y,t:0,text:'+'+g+' CR',c:7});}
-        if(k.kind==='bomb'){p.bombs=Math.min(G.bombsMax,p.bombs+1); L.fx.push({x:k.x,y:k.y,t:0,text:'+1 BOMB',c:10});}
+        if(k.kind==='shield'){p.shield=Math.min(maxShield(),p.shield+1); L.fx.push({x:k.x,y:k.y,t:0,text:'+1 SHIELD',c:13});}
+        if(k.kind==='cash'){const g=Math.max(1,Math.round(3*L.d*(L.danger?(L.R/0.8)**2:1)*(1+shipPerks().cr)));G.credits+=g;L.earned+=g; L.fx.push({x:k.x,y:k.y,t:0,text:'+'+g+' CR',c:7});}
+        if(k.kind==='bomb'){p.bombs=Math.min(maxBombs(),p.bombs+1); L.fx.push({x:k.x,y:k.y,t:0,text:'+1 BOMB',c:10});}
         if(k.kind==='cap')L.fx.push({x:k.x,y:k.y,t:0,text:'POD',c:10});
+        if(k.kind==='ore'){G.minerals=(G.minerals||0)+1; L.ore=(L.ore||0)+1; L.fx.push({x:k.x,y:k.y,t:0,text:'+1',c:13});}
         if(k.kind==='cap')p.bar=nextPower(p.bar); } }
     }
-    for(const k of L.pk){k.t++;k.x+=k.vx;k.y+=Math.sin(k.t*0.05)*0.3; if(k.x<-20)k.dead=true;}
+    for(const k of L.pk){k.t++;k.x+=k.vx;k.y+=Math.sin(k.t*0.05)*0.3; if(k.x<-20)k.dead=true;
+      if(k.kind==='ore'){k.y+=k.vy; k.vy*=0.94; const q=L.pl.find(p=>p.alive&&dist2(p.x,p.y,k.x,k.y)<48*48); if(q){k.x+=(q.x-k.x)*0.08; k.y+=(q.y-k.y)*0.08;}}}   // minerals drift to a ship that comes close
     for(const f of L.fx)f.t++; for(const a of L.arcs)a.t++; L.arcs=L.arcs.filter(a=>a.t<9); if(L.banner&&++L.banner.t>L.banner.dur)L.banner=null; if(L.rwarn&&--L.rwarn.t<=0)L.rwarn=null;
     L.pb=L.pb.filter(b=>!b.dead); L.eb=L.eb.filter(b=>!b.dead); L.en=L.en.filter(e=>!e.dead);
     L.pk=L.pk.filter(k=>!k.dead); L.fx=L.fx.filter(f=>f.t<(f.text?50:f.big?28:f.puff?10:f.spark?6:f.splash?24:21));
     if(L.state==='play'){
       if(L.pl.every(p=>!p.alive&&p.resp<0)){L.state='fail';L.endT=0;stopLongTrack();tune(TUNES.fail);}
       const bossOk=L.bossDue<0||(L.bossMade&&!L.boss);
-      if(L.t>=L.len&&!L.ev.length&&!L.en.some(e=>!e.rock&&!e.cannon)&&bossOk){L.state='clear';L.endT=0;{const run=G.planets[L.pi].run; if(run)run.surge=L.surge;}if(L.type==='boss'){stopLongTrack();tune(TUNES.planet);}this.finish();}
+      if(L.t>=L.len&&!L.ev.length&&!L.en.some(e=>!e.rock&&!e.cannon)&&bossOk){L.state='clear';L.endT=0;{const run=runOf(L); if(run)run.surge=L.surge;}if(L.type==='boss'){stopLongTrack();tune(TUNES.planet);}this.finish();}
     } else {
       L.endT++;
       if(L.endT>150&&(MENU.ok||L.endT>480)){
-        if(L.state==='fail'){G.ships=3; G.planets[L.pi].run=null; save(); go('hub',{fromPlanet:L.pi});}
+        if(L.state==='fail'){G.ships=3; if(L.ast!=null)G.ast[L.ast].run=null; else G.planets[L.pi].run=null; save(); go('hub',L.ast!=null?{fromAst:L.ast}:{fromPlanet:L.pi});}
+        else if(L.ast!=null){ if(L.type==='boss')go('hub',{fromAst:L.ast}); else {storeCarry(L); save(); go('amap',L.ast);} }
         else if(L.type==='boss'){ if(!G.endingSeen&&G.planets.every(p=>p.freed>0))go('ending',{from:L.pi}); else go('hub',{fromPlanet:L.pi}); }
         else {storeCarry(L); save(); go('map');}   // save again on leaving: powers taken on the 'Sector clear' screen count too
       }
     }
   },
   finish(){
-    const L=LV, run=G.planets[L.pi].run, bonus={assault:15,asteroids:15,ambush:18,elite:35,cache:10,boss:60}[L.type]*L.d*(L.node.sec?1.5:1);
+    const L=LV; if(L.ast!=null){this.finishAst(L); return;}
+    const run=G.planets[L.pi].run, bonus={assault:15,asteroids:15,ambush:18,elite:35,cache:10,boss:60}[L.type]*L.d*(L.node.sec?1.5:1);
     G.credits+=bonus; L.bonus=bonus;
     const pd=G.planets[L.pi];
     G.stats.levels++;
@@ -3484,13 +4158,23 @@ ST.level={
       questEvent('clear',L.pi,L.node.id,{flawless:!L.lost}); }
     save();
   },
+  finishAst(L){   // an asteroid level: credits, visit counts, and minerals for the boss
+    const as=G.ast[L.ast], run=as.run, bonus=Math.round({assault:15,asteroids:15,ambush:18,elite:35,boss:60}[L.type]*L.d);
+    G.credits+=bonus; L.bonus=bonus; G.stats.levels++; as.vc[L.node.id]=(as.vc[L.node.id]||0)+1;
+    if(L.type==='boss'){as.freed++; as.run=null; const ob=10+Math.round(ASTEROIDS[L.ast].diff*8); G.minerals=(G.minerals||0)+ob; L.oreBonus=ob;}
+    else if(run){run.pos=L.node.id; run.done.push(L.node.id); storeCarry(L);}
+    save();
+  },
   tap(){ if(LV&&LV.state!=='play')KP.Enter=true; },
   draw(){
     const L=LV; if(!L)return;
     ctx.save(); if(L.shake)ctx.translate(((L.r()-0.5)*L.shake)|0,((L.r()-0.5)*L.shake)|0);
+    if(L.vert){vmode(1); if(L.vert===1){ctx.translate(SW,13); ctx.rotate(Math.PI/2); VXF=(x,y)=>[SW-y,13+x];}   // going down: the far end is the bottom
+      else {ctx.translate(0,SPB); ctx.rotate(-Math.PI/2); VXF=(x,y)=>[y,SPB-x];}}                              // going up: the far end is the top
     drawBack(L); drawSolids(L); drawTerrain(L); drawBands(L); drawMist(L);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
+      if(e.ore){drawOre(L,e);continue;}
       if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.cells.ov&&!(e.flash>2))for(const q of e.cells.ov)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,1); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
@@ -3503,6 +4187,7 @@ ST.level={
     for(const k of L.pk){ if(k.kind==='cap'){spr(CAPF[(k.t>>3)%CAPF.length],k.x,k.y,(k.t>>3)&1?2:10);continue;}
       if(k.kind==='cash'){spr(GEMF[(k.t>>3)%GEMF.length],k.x,k.y,7);continue;}
       if(k.kind==='bomb'){spr(BOMBF[(k.t>>3)%2],k.x,k.y,10,{mc1:7});continue;}
+      if(k.kind==='ore'){const A=ASTEROIDS[L.ast]||ASTEROIDS[0], c=A.vein[(k.t>>3)&1]; rect(k.x-2,k.y-1,4,3,c); rect(k.x-1,k.y-2,2,5,c); rect(k.x-1,k.y-1,1,1,1); continue;}
       const P=PICKS[k.kind]; if(k.t%30<26||k.x>40)spr(P.b,k.x,k.y,P.c);}
     for(const b of L.pb){
       switch(b.kind){
@@ -3524,7 +4209,7 @@ ST.level={
         ctx.setLineDash([3,2]); ctx.lineDashOffset=-(L.t>>1); ctx.strokeStyle=PAL[p.pshCool>70?1:13]; ctx.lineWidth=1;
         ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,23,19,0,0,TAU); ctx.stroke(); ctx.setLineDash([]);}
       if(p.inv&&(p.inv>>2)%2)continue;
-      spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
+      spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c,{mc1:p.mc||15}); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
       if(p.pw.wing&&p.whp>0&&!(p.winv&&(p.winv>>2)%2)){spr(ETYPES.fighter.fr[((L.t/5)|0)%6],p.wx,p.wy,7,{flip:true,mc1:1});
         for(let k=0;k<wingMax(p);k++)rect(p.wx-15+k*4,p.wy-14,3,2,k<p.whp?13:11);}
       if(p.pw.ghost){ctx.globalAlpha=[0,0.3,0.4,0.5,0.65][p.pw.ghost]; spr(shipFrame(L.t+4),p.gx,p.gy,3); ctx.globalAlpha=1;}
@@ -3543,11 +4228,12 @@ ST.level={
       if(f.splash){const wc=WATER[L.pi]; for(let k=0;k<6;k++){const dx=(k-2.5)*3, dy=-f.t*(1.8-Math.abs(k-2.5)*0.35)+f.t*f.t*0.07; rect(f.x+dx,f.y+dy,1,2,k%2?wc[2]:1);} continue;}
       if(f.t<0)continue; const fr=156+Math.min(6,(f.t/(f.big?4:3))|0); spr(fr,f.x,f.y,7,{mc1:f.big?1:10,mc3:2});
     }
-    ctx.restore();
+    ctx.restore(); if(L.vert){vmode(0); VXF=null;}
     if(L.flash){ctx.globalAlpha=L.flash/20;rect(0,0,W,H,1);ctx.globalAlpha=1;}
     // HUD
     rect(0,0,W,12,0); rect(0,12,W,1,11);
-    const P=PLANETS[L.pi]; if(L.ng)txt('NG+'+L.ng,122,2,10,6); txt(P.name+': '+L.node.name,4,2,P.shades[2]===1?P.shades[1]:P.shades[2],6);
+    const P=PLANETS[L.pi], AS=L.ast!=null?ASTEROIDS[L.ast]:null; if(L.ng)txt('NG+'+L.ng,AS?140:122,2,10,6); txt((AS?AS.name:P.name)+': '+L.node.name,4,2,AS?AS.vein[0]:P.shades[2]===1?P.shades[1]:P.shades[2],6);
+    if(AS)txt('Ore '+(L.ore||0),104,2,13,6);
     if(L.intro>0&&!L.banner){ if(L.intro>20||(L.intro&2)){txtO(L.node.name,W/2,H/2-40,1,14,'center'); txtO(L.node.desc,W/2,H/2-18,15,6,'center');}}
     const prog=Math.min(1,L.t/L.len);
     {const w=L.rwarn, bl=!!w&&((L.t>>3)&1);   // green pips: they're easing off; a new wave: the label names its side and flashes
@@ -3567,7 +4253,8 @@ ST.level={
       frame(W/2-80,H/2,72,16,5,0); txt('Resume',W/2-44,H/2+4,13,7,'center'); hit(W/2-82,H/2-2,76,20,()=>{KP.Escape=true;});
       frame(W/2+8,H/2,72,16,10,0); txt('Back to map',W/2+44,H/2+5,10,6,'center'); hit(W/2+6,H/2-2,76,20,()=>{KP.KeyQ=true;});
       if(!TOUCH.on){ctx.strokeStyle=col(1); ctx.lineWidth=1; ctx.strokeRect((L.psel?W/2+6:W/2-82)+0.5,H/2-2+0.5,75,19); txt(PADON?'Left/right to choose, '+PADNAME[PAD.fire[0]]+' to confirm':'Esc: resume   Q: back to map',W/2,H/2+20,11,5,'center');}}
-    if(L.state==='clear'){txtO(L.type==='boss'?'Planet freed':'Sector clear',W/2,H/2-32,13,12,'center');
+    if(L.state==='clear'){txtO(L.type==='boss'?(L.ast!=null?'Asteroid cleared':'Planet freed'):'Sector clear',W/2,H/2-32,13,12,'center');
+      if(L.ast!=null)txtO('Minerals '+(L.ore||0)+(L.oreBonus?' + '+L.oreBonus+' for the boss':''),W/2,H/2+34,13,6,'center');
       txtO('Earned '+L.earned+' credits',W/2,H/2-8,7,7,'center'); txtO('Sector bonus '+L.bonus,W/2,H/2+4,7,7,'center');
       if(L.endT>150)txtO(TOUCH.on?'Tap to continue':'Press fire',W/2,H/2+22,(L.endT>>4)&1?1:12,7,'center');}
     if(L.state==='fail'){txtO('Mission failed',W/2,H/2-32,10,12,'center');
@@ -3579,7 +4266,7 @@ ST.level={
 // ================= skies: each route gets its own look =================
 const SKIES=['black','purple','light','green','rose','blue','darkred','nebula','galaxy','planets','rockband','oceanband','fireband','misty','hugeplanet','lightred','pink','orange','skyblue','satellites','fleet'];
 function skyFor(pi,node,sc){
-  if(sc==='x'||sc==='g')return 'black';
+  if(sc==='x'||sc==='g'||sc==='v')return 'black';
   if(pi===6&&node.id===0)return 'black';                     // the very first stage stays classic
   const r=mulberry(pi*131+node.id*977+7); let k=SKIES[Math.floor(r()*SKIES.length)];
   if(k.endsWith('band')&&!'sio'.includes(sc))k=pick(r,['purple','blue','nebula','rose','galaxy']);
@@ -3725,13 +4412,19 @@ function drawGrottoDeco(L,g){   // what grows on the cavern walls, every 22 px o
       if(ph<40)rect(ex,tip,1,1,g.pool[0]); else {const y=tip+(ph-40)*(ph-40)*0.04; if(y<floorY(L,ex))rect(ex,Math.round(y),1,2,g.pool[0]);}}
   }
 }
+function drawShaft(L){   // inside the asteroid: dark rock, with bands of strata going by as you drop or climb
+  const A=ASTEROIDS[L.ast], o=L.wx*0.45;
+  for(let k=Math.floor(o/34)-1;k<=Math.floor((o+W)/34)+1;k++){const hs=ihash(k+3300); if(hs%3===0)continue; const x=Math.round(k*34-o), c=hs%7===0?A.vein[1]:11;
+    for(let y=TOPY;y<PB;y+=2)if(BAYER[((y>>1)&3)*4+(x&3)]<0.28)rect(x,y,1,2,c);}
+  for(let k=0;k<24;k++){const hs=ihash(k+77), x=((hs%(W+40))-L.wx*0.3%(W+40)+(W+40))%(W+40)-20, y=TOPY+30+((hs>>>9)%(PB-60)); if(((L.t>>2)+k*5)%40<4)rect(x,y,1,1,A.vein[k&1]);}
+}
 function drawMist(L){ if(L.sky!=='misty'||!L.skyImg)return; const w=W*2, o=((L.wx*0.35)%w+w)%w; ctx.globalAlpha=0.18; ctx.drawImage(L.skyImg,-o,0); ctx.drawImage(L.skyImg,w-o,0); ctx.globalAlpha=1; }
 
 // ================= ending, credits and New Game+ =================
 function startNGPlus(){
   const keep={credits:G.credits,power:G.power,engine:G.engine,shield:G.shield,bombsMax:G.bombsMax,wep:G.wep,coop:G.coop,
     spreadLv:G.spreadLv,laserLv:G.laserLv,homingLv:G.homingLv,waveLv:G.waveLv,
-    musicOn:G.musicOn,ownMusic:G.ownMusic,ngp:(G.ngp||0)+1,stats:G.stats,pwUnlocked:G.pwUnlocked||[],weapon:G.weapon||'pulse',ships:Math.max(3,G.ships)};
+    musicOn:G.musicOn,ownMusic:G.ownMusic,minerals:G.minerals||0,shipCol:G.shipCol||0,shipsOwned:G.shipsOwned||[1,0,0,0,0,0,0],ngp:(G.ngp||0)+1,stats:G.stats,pwUnlocked:G.pwUnlocked||[],weapon:G.weapon||'pulse',ships:Math.max(3,G.ships)};
   G=Object.assign(newGame(),keep,{started:true}); save();
   go('hub',{intro:true}); toast('New Game+ '+G.ngp+'. Everything is faster and tougher.',240);
 }
