@@ -125,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.42</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.43</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -676,7 +676,7 @@ const vFace=(L,y)=>{const p=L.pl.find(q=>q.alive)||L.pl[0]; return L.vert===1?p.
 const vOff=(L,x,y,dx,dy)=>!L.vert?[x+dx,y+dy]:L.vert===1?[x+dy,y-dx]:[x-dy,y+dx];   // a screen offset from a point, in the level's space
 function srect(L,x,y,dx,dy,w,h,c){if(!L.vert)return rect(x+dx,y+dy,w,h,c); if(L.vert===1)rect(x+dy,y-dx-w,h,w,c); else rect(x-dy-h,y+dx,h,w,c);}   // bars and lights over ships keep the screen's way up
 const vIn=(L,a,b)=>!L.vert?[a,b]:L.vert===1?[b,-a]:[-b,a];   // screen direction -> level direction
-const VERSION='2.42';
+const VERSION='2.43';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -1341,7 +1341,7 @@ function drawStation(x,y,t){
   rect(x-4,y-4,8,8,12); rect(x-3,y-3,6,6,15); rect(x-1,y-1,2,2,11);
   rect(x-1,y-8,2,4,12); if(((t/20)|0)%2)rect(x-1,y-9,2,1,2); else rect(x-1,y-9,2,1,10);
 }
-function drawAsteroid(a,x,y,t){const A=ASTEROIDS[a], set=ROCKSETS[3+a%3]; spr(set[((t>>4)+a)%set.length],x,y,A.rock[0],{mc1:A.vein[0],mc3:12});}   // on the map: the asteroid's coloured edges round solid grey rock (not see-through black)
+function drawAsteroid(a,x,y,t){const A=ASTEROIDS[a], set=MAPROCKS[a]; spr(set[((t>>4)+a)%set.length],x,y,A.rock[0],{mc1:A.vein[0],mc3:12});}   // on the map: the asteroid's coloured edges round solid grey rock (not see-through black)
 function bodyPos(o,speed,t,phase){const a=phase+t*speed; return {x:CX+Math.cos(a)*o*ORX, y:CY+Math.sin(a)*o*ORY, a};}
 
 // ================= new enemies, drawn in Delta's sprite style =================
@@ -2933,6 +2933,14 @@ function genSprites(){
       for(let c=0;c<3;c++){const a=rot+c*2.1+k, rr=0.42; P.ell(12+Math.cos(a)*rr*R[0],10.5+Math.sin(a)*rr*R[1],big?2.4:1.8,big?1.9:1.4,3);}
       P.stylizeRock(); P.write(nb); set.push(nb++);}
     ROCKSETS.push(set);}
+  MAPROCKS=[];
+  for(let k=0;k<4;k++){const R=[6.3,5.6], s=[k*2.3+0.7,k*1.9+2.1,k*1.1+0.4], set=[];
+    for(let f=0;f<6;f++){const P=painter(); P.sx=1; const rot=f/6*TAU/3;
+      P.put((x,y)=>{const dx=(x-12)/R[0], dy=(y-10.5)/R[1], a=Math.atan2(dy,dx)-rot, d=Math.hypot(dx,dy);
+        return d<=0.88+0.08*Math.sin(3*a+s[0])+0.05*Math.sin(5*a+s[1])+0.03*Math.sin(7*a+s[2]);},2);
+      for(let c=0;c<2;c++){const a=rot+c*3.1+k, rr=0.38; P.ell(12+Math.cos(a)*rr*R[0],10.5+Math.sin(a)*rr*R[1],1.5,1.2,3);}
+      P.stylizeRock(); P.write(nb); set.push(nb++);}
+    MAPROCKS.push(set);}
   // one guardian hull per planet, painted as a single large picture and cut into sprites
   BOSSART=[];
   for(let pi=0;pi<7;pi++){const d=BOSSDESIGN[pi], P=painter(d.cw,d.ch), art=BIGPIX['boss'+pi]; if(art)pixFill(P,art); else {d.draw(P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next;
@@ -2944,7 +2952,7 @@ function genSprites(){
   for(let pi=0;pi<7;pi++){const P=painter(2,2), art=BIGPIX['mini'+pi]; if(art)pixFill(P,art); else {P.sx=0.92; MINIDESIGN[pi](P); P.stylize();} const r=P.writeBlocks(nb); nb=r.next; r.cells.ov=shineCells(art,2,2); MINIART.push(r.cells);}   // .ov: its white shine
   {const P=painter(2,2); pixFill(P,BIGPIX.gunship); const r=P.writeBlocks(nb); nb=r.next; GUNART={cw:2,ch:2,cells:r.cells,ov:shineCells(BIGPIX.gunship,2,2),core:[-10,0],tur:[[-24,-10],[-24,10]]};}
 }
-let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[],ABOSSART=[];
+let BOSSART=[],GUNART=null,ROCKSETS=[],MINIART=[],ABOSSART=[],MAPROCKS=[];
 // mini-bosses: one larger ship per planet, 2x2 sprites (48x42), facing left
 const MINIDESIGN=[
  null,null,null,null,null, // Ignis to Tethys are drawn art (BIGPIX mini0-4)
@@ -3052,8 +3060,8 @@ ST.hub={
   },
   bodies(){
     const out=[]; const t=this.t/60;
-    PLANETS.forEach((P,i)=>{const p=bodyPos(P.orbit,P.speed,t,i*0.9+0.4); const sc=0.85+0.15*Math.sin(p.a); out.push({pi:i,x:p.x,y:p.y,r:Math.max(5,Math.round(P.size*sc)),depth:p.y});});
-    ASTEROIDS.forEach((A,a)=>{const p=bodyPos(A.orbit,A.speed,t,A.phase); out.push({ast:a,x:p.x,y:p.y,r:7,depth:p.y});});
+    PLANETS.forEach((P,i)=>{const p=bodyPos(P.orbit,P.speed,t,i*0.9+0.4); const sc=0.85+0.15*Math.sin(p.a); out.push({pi:i,x:p.x,y:p.y,r:Math.max(8,Math.round(P.size*1.3*sc)),depth:p.y});});
+    ASTEROIDS.forEach((A,a)=>{const p=bodyPos(A.orbit,A.speed,t,A.phase); out.push({ast:a,x:p.x,y:p.y,r:6,depth:p.y});});
     const s=bodyPos(STATION.orbit,STATION.speed,t,2.2); out.push({station:true,x:s.x,y:s.y,r:10,depth:s.y});
     return out;
   },
