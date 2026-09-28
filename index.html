@@ -42,6 +42,9 @@ body{display:grid;place-items:center;font-family:Silkscreen,'Courier New',monosp
 #game,#ui{display:block}
 #game{image-rendering:pixelated;image-rendering:crisp-edges;background:#000}
 #ui{position:absolute;left:0;top:0;pointer-events:none}
+/* CRT scanlines over the pixel art (the text canvas sits above them, so text stays sharp); sized in resize() */
+#scan{position:absolute;left:0;top:0;pointer-events:none;display:none}
+body.scan #scan{display:block}
 /* controller legend under the game: non-touch screens (the Windows version), once a pad is plugged in */
 #padkeys{display:none;padding-top:.45em;line-height:1;color:#9f9f9f;white-space:nowrap}
 body.pad:not(.touch) #padkeys{display:grid}
@@ -107,7 +110,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 })();
 </script>
 
-<div id="stage"><canvas id="game"></canvas><canvas id="ui"></canvas><div id="padkeys"></div></div>
+<div id="stage"><canvas id="game"></canvas><div id="scan"></div><canvas id="ui"></canvas><div id="padkeys"></div></div>
 <div id="touchbar">
   <button class="tbtn" id="tb-auto">Auto fire: on</button>
   <button class="tbtn" id="tb-pause">Pause</button>
@@ -122,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.23</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.24</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,12 +666,13 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.23';
+const VERSION='2.24';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
 const ov=document.getElementById('ui'), octx=ov.getContext('2d');
 let S=2, DPR=1;
+let SCAN=true; try{SCAN=localStorage.getItem('deltaOdyssey.scanlines')!=='0';}catch(e){}
 function resize(){
   const fit=r=>{let s=Math.min(innerWidth/W,(innerHeight-r)/H); if(s>=2)s=Math.floor(s); return s>0?s:1;};
   let s=fit(0);
@@ -681,6 +685,10 @@ function resize(){
   }
   S=s; DPR=window.devicePixelRatio||1;
   cv.style.width=ov.style.width=(W*s)+'px'; cv.style.height=ov.style.height=(H*s)+'px';
+  // one scanline per C64 pixel row: the bottom 40% of each row is darkened (only at whole-number scales, or it shimmers)
+  {const sc=document.getElementById('scan'); sc.style.width=(W*s)+'px'; sc.style.height=(H*s)+'px';
+   sc.style.background=`repeating-linear-gradient(to bottom,transparent 0 ${s*0.6}px,rgba(0,0,0,.32) ${s*0.6}px ${s}px)`;
+   document.body.classList.toggle('scan',SCAN&&s>=2&&s===Math.floor(s));}
   ov.width=Math.round(W*s*DPR); ov.height=Math.round(H*s*DPR);
 }
 addEventListener('resize',resize); resize(); if(document.fonts)document.fonts.ready.then(resize);
@@ -764,7 +772,8 @@ function readPad(i){
   const ps=navigator.getGamepads?navigator.getGamepads():null; const p=ps&&ps[i]; if(!p)return null;
   const b=j=>!!(p.buttons[j]&&p.buttons[j].pressed), on=a=>a.some(b); const ax=j=>Math.abs(p.axes[j]||0)>0.35?p.axes[j]:0;
   const trig=j=>!!p.buttons[j]&&p.buttons[j].value>(ctlPrev[i].auto?0.33:0.5);   // a trigger: in past halfway, out under a third
-  return {x:ax(0)+(b(15)?1:0)-(b(14)?1:0), y:ax(1)+(b(13)?1:0)-(b(12)?1:0), fire:on(PAD.fire), sw:on(PAD.sw), bomb:on(PAD.bomb), pw:on(PAD.pw), sh:on(PAD.sh), psh:on(PAD.psh), start:on(PAD.start), back:on(PAD.back), auto:PAD.auto.some(trig)};
+  return {act:p.buttons.some(q=>q&&q.pressed)||Math.abs(ax(0))>0.5||Math.abs(ax(1))>0.5,   // the pad is being used
+    x:ax(0)+(b(15)?1:0)-(b(14)?1:0), y:ax(1)+(b(13)?1:0)-(b(12)?1:0), fire:on(PAD.fire), sw:on(PAD.sw), bomb:on(PAD.bomb), pw:on(PAD.pw), sh:on(PAD.sh), psh:on(PAD.psh), start:on(PAD.start), back:on(PAD.back), auto:PAD.auto.some(trig)};
 }
 (function(){ // the legend: first button of each action (two for fire), gameplay row in levels, menu row elsewhere
   const key=j=>`<b class="k${j}${j<4?' pf':''}">${PADNAME[j]}</b>`, it=(k,t)=>`<span>${k}${t}</span>`;
@@ -774,12 +783,12 @@ function readPad(i){
     '<div class="mn">'+stick('Move')+act('fire','Choose')+act('back','Back')+'</div>';
 })();
 function pollInput(){
-  let seen=false;
+  let seen=false, act=false;
   for(let i=0;i<2;i++){
     const m=KEYMAP[i], any=a=>a.some(k=>K[k]);
     let x=(any(m.right)?1:0)-(any(m.left)?1:0), y=(any(m.down)?1:0)-(any(m.up)?1:0);
     let fire=any(m.fire), sw=any(m.sw), bomb=any(m.bomb), pw=any(m.pw), sh=any(m.sh), psh=any(m.psh), start=false, back=false, auto=false;
-    const p=readPad(i); if(p){seen=true;x+=p.x;y+=p.y;fire=fire||p.fire;sw=sw||p.sw;bomb=bomb||p.bomb;pw=pw||p.pw;sh=sh||p.sh;psh=psh||p.psh;start=p.start;back=p.back;auto=p.auto;}
+    const p=readPad(i); if(p){seen=true; act=act||p.act;x+=p.x;y+=p.y;fire=fire||p.fire;sw=sw||p.sw;bomb=bomb||p.bomb;pw=pw||p.pw;sh=sh||p.sh;psh=psh||p.psh;start=p.start;back=p.back;auto=p.auto;}
     x=clamp(x,-1,1);y=clamp(y,-1,1);
     const c={x,y,fire,sw,bomb,pw,sh,psh,start,back,auto,up:y<-0.5,down:y>0.5,left:x<-0.5,right:x>0.5}, pv=ctlPrev[i];
     for(const k of ['fire','sw','bomb','pw','sh','psh','start','back','auto','up','down','left','right'])c[k+'P']=c[k]&&!pv[k];
@@ -788,6 +797,10 @@ function pollInput(){
     CT[i]=c; ctlPrev[i]=c;
   }
   if(seen!==PADON){PADON=seen; document.body.classList.toggle('pad',seen); resize();}
+  // picking up the controller on a touch screen (iPad) switches to controller play: no touch buttons, the button legend, pad prompts;
+  // touching the screen switches back. A press also tries to start the sound (iOS may still want one tap for that).
+  if(act&&!pollInput.act){ if(TOUCH.on)disableTouch(); if(!SND.live)SND.unlock(); }
+  pollInput.act=act;
 }
 const MENU={
   get up(){return CT[0].upP||CT[1].upP;}, get down(){return CT[0].downP||CT[1].downP;},
@@ -2341,13 +2354,13 @@ function go(s,arg){STATE=ST[s]; STATE.enter&&STATE.enter(arg);}
 // ---------- title ----------
 ST.title={
   enter(){tune(TUNES.title); this.sel=1; this.t=0; this.confirm=false;},
-  items(){const a=['Slot '+SLOT+': '+slotInfo(SLOT)]; if(hasSave()&&G.started)a.push(G.ngp?'Continue (New Game+ '+G.ngp+')':'Continue'); if(G.ngReady)a.push('New Game+'); a.push('New game'); a.push('Players: '+(G.coop?'two':'one')); a.push('Music: '+MUSICNAME[musicMode()]); return a;},
+  items(){const a=['Slot '+SLOT+': '+slotInfo(SLOT)]; if(hasSave()&&G.started)a.push(G.ngp?'Continue (New Game+ '+G.ngp+')':'Continue'); if(G.ngReady)a.push('New Game+'); a.push('New game'); a.push('Players: '+(G.coop?'two':'one')); a.push('Music: '+MUSICNAME[musicMode()]); a.push('Scanlines: '+(SCAN?'on':'off')); return a;},
   update(){
     this.t++; const it=this.items();
     if(MENU.up){this.sel=(this.sel+it.length-1)%it.length;SND.sfx('sel');this.confirm=false;}
     if(MENU.down){this.sel=(this.sel+1)%it.length;SND.sfx('sel');this.confirm=false;}
     if(this.sel>=it.length)this.sel=it.length-1;
-    if(MENU.ok||((MENU.left||MENU.right)&&(this.sel>=it.length-2||this.sel===0))){
+    if(MENU.ok||((MENU.left||MENU.right)&&(this.sel===0||/^(Players|Music|Scanlines)/.test(it[this.sel]||'')))){
       const c=it[this.sel];
       if(this.sel===0){useSlot(((SLOT-1+(MENU.left?-1:1))%SLOTS+SLOTS)%SLOTS+1); SND.sfx('sel'); this.confirm=false; toasts=toasts.filter(t=>!/^Slot \d has a game/.test(t.m)); Music.setOn(G.musicOn!==false);}
       else if(c.startsWith('Continue')){SND.sfx('ok');go('hub');}
@@ -2357,13 +2370,14 @@ ST.title={
         else {const coop=G.coop,mus=G.musicOn,own=G.ownMusic;G=newGame();G.coop=coop;G.musicOn=mus;G.ownMusic=own;G.started=true;save();SND.sfx('ok');this.confirm=false;go('hub',{intro:true});}}
       else if(c.startsWith('Players')){G.coop=!G.coop;save();SND.sfx('sel');}
       else if(c.startsWith('Music')){toggleMusic(MENU.left?-1:1);}
+      else if(c.startsWith('Scanlines')){SCAN=!SCAN; try{localStorage.setItem('deltaOdyssey.scanlines',SCAN?'1':'0');}catch(e){} resize(); SND.sfx('sel');}
     }
   },
   draw(){
     drawStars(1.2,this.t);
     // parade of Delta sprites
     const pool=['ring','spinner','cross','crate','cone','fighter','hive'];
-    for(let i=0;i<7;i++){const T=ETYPES[pool[i]], x=((W+60)-((this.t*0.8+i*62)%(W+60)))-30, y=170+Math.sin(this.t*0.04+i)*5;
+    for(let i=0;i<7;i++){const T=ETYPES[pool[i]], x=((W+60)-((this.t*0.8+i*62)%(W+60)))-30, y=182+Math.sin(this.t*0.04+i)*4;
       spr(T.fr[((this.t/T.an)|0)%T.fr.length],x,y,[14,3,7,13,10,5,4][i]);}
     spr(shipFrame(this.t),50+Math.sin(this.t*0.03)*6,140,14);
     // the original DELTA logo, read from your disk: top half is sprites 48-55, bottom half 60-67
@@ -2372,16 +2386,16 @@ ST.title={
      const rows=[[[3,48],[4,49]],[[2,50],[3,51],[4,52],[5,53]],[[1,54],[2,55],[3,56],[4,57],[5,58],[6,59]],[[0,60],[1,61],[2,62],[3,63],[4,64],[5,65],[6,66],[7,67]]];
      rows.forEach((row,r)=>{for(const [c,b] of row)spr(b,lx+c*24+12,by-(3-r)*21+10,15,o);});}
     txtO('ODYSSEY',W/2,90,3,14,'center');
-    txtO('Delta \u00a9 1987 Thalamus. Original game by Stavros Fasoulas, music by Rob Hubbard.',W/2,186,12,5,'center');
-    txtO('Delta Odyssey is an unofficial fan project. You must own the original Delta disk to play.',W/2,195,12,5,'center');
-    txtO('Access passwords are given after validation by Goatington: mirkoruckels@gmail.com',W/2,204,11,5,'center');
+    txtO('Delta \u00a9 1987 Thalamus. Original game by Stavros Fasoulas, music by Rob Hubbard.',W/2,199,12,5,'center');
+    txtO('Delta Odyssey is an unofficial fan project. You must own the original Delta disk to play.',W/2,207,12,5,'center');
+    txtO('Access passwords are given after validation by Goatington: mirkoruckels@gmail.com',W/2,215,11,5,'center');
     const it=this.items();
-    it.forEach((s,i)=>{const on=i===this.sel, y=i?105+i*11:104;
+    it.forEach((s,i)=>{const on=i===this.sel, y=i?104+i*10:104;
       if(i===0)txt((on?'< ':'')+s+(on?' >':''),W/2,y,on?7:12,7,'center'); else txt((on?'> ':'  ')+s,W/2-60,y,on?7:15,8);
-      hit(W/2-80,y-3,180,11,()=>{this.sel=i;KP.Enter=true;});});
-    txt(this.sel===0?(TOUCH.on?'Tap to change save slot':'Left/right: change save slot (5 slots)'):(it[this.sel]||'').startsWith('Music')?MUSICHINT[musicMode()]:TOUCH.on?'Tap to choose':'Arrows or pad to move, Z or Space to choose',W/2,226,11,6,'center');
+      hit(W/2-80,y-2,180,10,()=>{this.sel=i;KP.Enter=true;});});
+    txt(this.sel===0?(TOUCH.on?'Tap to change save slot':'Left/right: change save slot (5 slots)'):(it[this.sel]||'').startsWith('Music')?MUSICHINT[musicMode()]:TOUCH.on?'Tap to choose':'Arrows or pad to move, Z or Space to choose',W/2,229,11,6,'center');
     txt('Version '+VERSION,W-6,6,12,6,'right');
-    if(!SND.live&&G.musicOn!==false&&((this.t>>4)&1))txtO(TOUCH.on?'Tap the screen to turn on sound':'Press a key or click to turn on sound',W/2,158,7,6,'center');
+    if(!SND.live&&G.musicOn!==false&&((this.t>>4)&1))txtO(TOUCH.on||navigator.maxTouchPoints>0?'Tap the screen to turn on sound':'Press a key or click to turn on sound',W/2,158,7,6,'center');
   }
 };
 // music: 'on' (the game's tunes), 'own' (no game tunes, so music from another app can play alongside), 'off' (sound effects only)
@@ -3208,8 +3222,9 @@ ST.level={
   enter(a){LV=buildLevel(a.pi,a.node); LV.intro=200; if(ownedWeapons().length>1)toast('Weapon: '+WNAME[ownedWeapons()[LV.pl[0].w]]+'   ('+(TOUCH.on?'tap Weapon':'X')+' to switch)',200); if(G.newPw){const P=POWERS.find(q=>q.id===G.newPw); toast('New power '+P.label+' is at the end of your strip. Collect pods to reach it.',260);} {const p=LV.pl[0], c=POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label); if(c.length)toast('Powers carried in: '+POWERS.filter(P=>P.id!=='nova'&&p.pw[P.id]).map(P=>P.label+(P.max>1?' '+p.pw[P.id]:'')).join('  '),240);} this.a=a; tune(TUNES.level);},
   update(){
     const L=LV; if(!L)return;
-    if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; SND.sfx('sel');}
-    if(L.pause){ if(KP.KeyQ){go('map');} return; }
+    if(KP.Escape||KP.KeyP||CT[0].startP){L.pause=!L.pause; L.psel=0; SND.sfx('sel');}
+    if(L.pause){ if(MENU.left||MENU.right){L.psel=L.psel?0:1; SND.sfx('sel');}
+      const pick=CT[0].fireP||CT[1].fireP; if(KP.KeyQ||(pick&&L.psel)){go('map');} else if(pick){L.pause=false; SND.sfx('sel');} return; }
     for(let i=0;i<L.pl.length;i++)if(CT[i].autoP)toggleAuto(i,L.pl.length>1);
     if(KP.KeyM)toggleMusic();
     // reinforcements only arrive in the main part of a stage (not once its time is up, not during a boss fight),
@@ -3443,7 +3458,7 @@ ST.level={
     if(L.pause){frame(W/2-90,H/2-30,180,60,7,0); txt('Paused',W/2,H/2-24,1,10,'center');
       frame(W/2-80,H/2,72,16,5,0); txt('Resume',W/2-44,H/2+4,13,7,'center'); hit(W/2-82,H/2-2,76,20,()=>{KP.Escape=true;});
       frame(W/2+8,H/2,72,16,10,0); txt('Back to map',W/2+44,H/2+5,10,6,'center'); hit(W/2+6,H/2-2,76,20,()=>{KP.KeyQ=true;});
-      if(!TOUCH.on)txt('Esc: resume   Q: back to map',W/2,H/2+20,11,5,'center');}
+      if(!TOUCH.on){ctx.strokeStyle=col(1); ctx.lineWidth=1; ctx.strokeRect((L.psel?W/2+6:W/2-82)+0.5,H/2-2+0.5,75,19); txt(PADON?'Left/right to choose, '+PADNAME[PAD.fire[0]]+' to confirm':'Esc: resume   Q: back to map',W/2,H/2+20,11,5,'center');}}
     if(L.state==='clear'){txtO(L.type==='boss'?'Planet freed':'Sector clear',W/2,H/2-32,13,12,'center');
       txtO('Earned '+L.earned+' credits',W/2,H/2-8,7,7,'center'); txtO('Sector bonus '+L.bonus,W/2,H/2+4,7,7,'center');
       if(L.endT>150)txtO(TOUCH.on?'Tap to continue':'Press fire',W/2,H/2+22,(L.endT>>4)&1?1:12,7,'center');}
@@ -3698,6 +3713,7 @@ document.getElementById('forget').addEventListener('click',()=>{try{localStorage
 // ----- pointer / touch -----
 const tbar=document.getElementById('touchbar');
 function enableTouch(){ if(TOUCH.on)return; TOUCH.on=true; document.body.classList.add('touch'); updateAuto(); resize(); }
+function disableTouch(){ if(!TOUCH.on)return; TOUCH.on=false; document.body.classList.remove('touch'); for(const d of TOUCH.drag)d.down=false; resize(); }
 function updateAuto(){document.getElementById('tb-auto').textContent='Auto fire: '+(TOUCH.autoFire?'on':'off'); document.getElementById('tb-auto').classList.toggle('lit',TOUCH.autoFire);}
 function gameXY(e){const r=cv.getBoundingClientRect(); return {x:(e.clientX-r.left)/r.width*W, y:(e.clientY-r.top)/r.height*H, k:W/r.width};}
 addEventListener('pointerdown',e=>{
