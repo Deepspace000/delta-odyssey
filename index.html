@@ -125,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.26</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.27</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -666,7 +666,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.26';
+const VERSION='2.27';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -1104,8 +1104,8 @@ const slotKey=n=>n===1?SAVE_KEY:SAVE_KEY+'.s'+n;
 function newGame(){
   return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
-    planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
-    qs:{},unlocked:7,coop:false,musicOn:true,ownMusic:false,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
+    planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[],vc:[]})),
+    qs:{},qset:{},unlocked:7,coop:false,musicOn:true,ownMusic:false,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(slotKey(SLOT),JSON.stringify(G));}catch(e){}}
@@ -1118,29 +1118,62 @@ function slotInfo(n){try{const s=localStorage.getItem(slotKey(n)); if(!s)return 
 function useSlot(n){const coop=G.coop, mus=G.musicOn, own=G.ownMusic; SLOT=n; try{localStorage.setItem(SLOT_KEY,String(n));}catch(e){}
   if(!loadSave())G=newGame(); G.coop=coop; G.musicOn=mus; G.ownMusic=own;}
 
-// ---------- quests: 3 fixed quests per planet, some need a certain route ----------
+// ---------- quests: three per planet at a time, some need a certain route. The first three are hand-made (WORLD);
+// once all three are collected, three more turn up, made from the planet's own levels, and so on for ever. ----------
 const isUnlocked=pi=>true;   // every planet is open: the threat against your ship power says where you stand
-function qState(pi,qi){const k=pi+'-'+qi; return G.qs[k]||(G.qs[k]={st:'open',prog:0});}
-function allQuests(){const out=[]; for(const pi of UNLOCK_ORDER){ if(!isUnlocked(pi))continue;
-  WORLD[pi].quests.forEach((q,qi)=>out.push({pi,qi,q,s:qState(pi,qi)})); } return out;}
+// times a level has been cleared (vc; older saves only know seen = at least once); the guardian counts its defeats
+const nodeVisits=(pd,id)=>id===11?pd.freed:pd.vc&&pd.vc[id]!=null?pd.vc[id]:pd.seen.includes(id)?1:0;
+const ROCKNOUN=['boulders','asteroids','seed husks','ice slabs','ice reefs','crystals','ore rocks'];
+const QGEN={};
+// set n (1, 2, ...) of planet pi: always the same three for the same n. Each set asks a bit more and pays a bit more
+// (+15% a set; targets +30% a set, up to 4x), and later sets lean on the deeper levels.
+function genQuests(pi,n){
+  const id=pi+'/'+n; if(QGEN[id])return QGEN[id];
+  const r=mulberry(pi*7331+n*9241+17), Wd=WORLD[pi], lv=Wd.lv, d=PLANETS[pi].diff;
+  const base=Wd.quests.reduce((a,q)=>a+q.reward,0)/Wd.quests.length, grow=1+0.15*n, big=Math.min(4,1+0.3*n);
+  const r25=v=>Math.max(25,Math.round(v/25)*25), r5=v=>Math.max(5,Math.round(v/5)*5);
+  const of=t=>lv.map((l,i)=>[i,l[1]]).filter(x=>t.includes(x[1])).map(x=>x[0]);
+  const deep=a=>{const b=a.filter(i=>i>=Math.min(7,2+n)); return b.length?b:a;};
+  const nm=i=>lv[i][0].replace(/^The /,'the '), boss=Wd.boss[0].replace(/^The /,'the ');
+  const used=new Set(), pk=a=>{const b=a.filter(i=>!used.has(i)), i=pick(r,b.length?b:a); used.add(i); return i;};   // three different levels where it can
+  const make={
+    killin:()=>{const i=pk(deep(of(['assault','ambush','elite']))), m=r5((10+5*d)*big); return {kind:'killin',node:i,n:m,text:'Destroy '+m+' enemies in '+nm(i),reward:r25(base*grow)};},
+    rocksin:()=>{const a=of(['asteroids']); if(!a.length)return null; const i=pk(a), m=r5((15+2.5*d)*big); return {kind:'rocksin',node:i,n:m,text:'Break '+m+' '+ROCKNOUN[pi]+' in '+nm(i),reward:r25(base*0.9*grow)};},
+    flawless:()=>{const i=pk(deep(of(['assault','ambush','elite','asteroids']))); return {kind:'flawless',node:i,text:'Clear '+nm(i)+' without losing a ship',reward:r25(base*1.2*grow)};},
+    rfkill:()=>{const m=r5((6+2*d)*big); return {kind:'rfkill',node:-1,n:m,text:'Shoot down '+m+' reinforcement ships on '+PLANETS[pi].name,reward:r25(base*1.1*grow)};},
+    via:()=>{const i=pk(of(['assault','ambush','elite','asteroids','cache']).filter(i=>i>=7)); return {kind:'via',node:i,text:'Take '+nm(i)+', then defeat '+boss,reward:r25(base*1.6*grow)};},
+    route:()=>{const i=pk(deep(of(['cache','ambush','asteroids']))); return {kind:'route',node:i,text:pick(r,['Scout','Survey','Sweep','Patrol'])+' '+nm(i),reward:r25(base*0.7*grow)};},
+  };
+  const bag=['killin','killin','flawless','rocksin','rfkill','via','route'], out=[];
+  while(out.length<3&&bag.length){const k=bag.splice(Math.floor(r()*bag.length),1)[0]; if(out.some(q=>q.kind===k))continue; const q=make[k](); if(q)out.push(q);}
+  return QGEN[id]=out;
+}
+// the planet's current three quests, each {pi,qi,q,s}; when all three have been collected, the next set turns up
+function questSet(pi){
+  if(!G.qset)G.qset={};
+  for(;;){const n=G.qset[pi]||0, qs=n?genQuests(pi,n):WORLD[pi].quests;
+    const list=qs.map((q,j)=>{const key=n?pi+'-'+n+'-'+j:pi+'-'+j; return {pi,qi:j,q,key,s:G.qs[key]||(G.qs[key]={st:'open',prog:0})};});
+    if(!list.every(x=>x.s.st==='claimed'))return list;
+    for(const x of list)delete G.qs[x.key]; G.qset[pi]=n+1;}
+}
+function allQuests(){const out=[]; for(const pi of UNLOCK_ORDER){ if(!isUnlocked(pi))continue; out.push(...questSet(pi)); } return out;}
 const activeCount=()=>allQuests().filter(x=>x.s.st==='active').length;
 function questNeed(q){return q.n||1;}
-function completeQuest(pi,qi){
-  const s=qState(pi,qi), q=WORLD[pi].quests[qi]; s.st='done'; s.prog=questNeed(q);
-  toast('Quest complete on '+PLANETS[pi].name+': '+q.text,200); SND.sfx('ok');
+function completeQuest(x){
+  x.s.st='done'; x.s.prog=questNeed(x.q);
+  toast('Quest complete on '+PLANETS[x.pi].name+': '+x.q.text,200); SND.sfx('ok');
   save();
 }
 // kind: 'kill' | 'rock' | 'clear' | 'guardian'
 function questEvent(kind,pi,node,extra={}){
-  WORLD[pi].quests.forEach((q,qi)=>{
-    const s=qState(pi,qi); if(s.st!=='active')return;
-    if((kind==='kill'&&q.kind==='killin'&&node===q.node)||(kind==='rock'&&q.kind==='rocksin'&&node===q.node)){
-      s.prog++; if(s.prog>=q.n)completeQuest(pi,qi); }
-    if(kind==='clear'&&q.node===node&&(q.kind==='route'||(q.kind==='flawless'&&extra.flawless)))completeQuest(pi,qi);
-    if(kind==='guardian'&&q.kind==='via'&&extra.path&&extra.path.includes(q.node))completeQuest(pi,qi);
-  });
+  for(const x of questSet(pi)){ const q=x.q, s=x.s; if(s.st!=='active')continue;
+    if((kind==='kill'&&q.kind==='killin'&&node===q.node)||(kind==='rock'&&q.kind==='rocksin'&&node===q.node)||(kind==='kill'&&q.kind==='rfkill'&&extra.rf)){
+      s.prog++; if(s.prog>=q.n)completeQuest(x); }
+    if(kind==='clear'&&q.node===node&&(q.kind==='route'||(q.kind==='flawless'&&extra.flawless)))completeQuest(x);
+    if(kind==='guardian'&&q.kind==='via'&&extra.path&&extra.path.includes(q.node))completeQuest(x);
+  }
 }
-function questsOnNode(pi,node){return WORLD[pi].quests.map((q,qi)=>({q,qi,s:qState(pi,qi)})).filter(x=>x.q.node===node&&x.s.st==='active');}
+function questsOnNode(pi,node){return questSet(pi).filter(x=>x.q.node===node&&x.s.st==='active');}
 
 // ---------- shop ----------
 const SHOP=[   // lv/max drive the level boxes in the station shop: bought levels filled, the next one outlined
@@ -2503,6 +2536,7 @@ ST.station={
       const it=this.qlist()[this.sel]; if(!it)return;
       if(MENU.ok){
         if(it.s.st==='done'){G.credits+=it.q.reward; it.s.st='claimed'; SND.sfx('coin'); tune(TUNES.quest); toast('Reward collected: '+it.q.reward+' credits',120);
+          {const n0=G.qset[it.pi]||0; questSet(it.pi); if((G.qset[it.pi]||0)>n0)toast('Three new quests on '+PLANETS[it.pi].name+'.',200);}
           this.sel=Math.max(0,Math.min(this.sel,this.qlist().length-1)); save();}
         else if(it.s.st==='active'){SND.sfx('deny');toast('Still in progress.',70);}
         else if(activeCount()>=3){SND.sfx('deny');toast('You can carry 3 quests at a time.',100);}
@@ -2529,7 +2563,7 @@ ST.station={
     if(this.tab===0){
       const L=this.qlist(), rows=6;
       if(this.sel<this.top)this.top=this.sel; if(this.sel>=this.top+rows)this.top=this.sel-rows+1;
-      if(!L.length)txt('All quests done. Free more planets to open new ones.',W/2,100,15,7,'center');
+      if(!L.length)txt('No quests right now.',W/2,100,15,7,'center');
       L.slice(this.top,this.top+rows).forEach((it,j)=>{
         const i=this.top+j, y=y0+j*23, on=i===this.sel, P=PLANETS[it.pi], q=it.q, st=it.s.st;
         if(on)rect(18,y-2,W-36,22,6);
@@ -2600,12 +2634,12 @@ ST.map={
         ctx.beginPath();ctx.moveTo(a.x+14.5,a.y+0.5);ctx.lineTo(b.x-14.5,b.y+0.5);ctx.stroke(); ctx.setLineDash([]);}}
     if(run.pos<0){const a=this.nodeXY(this.map.nodes[0]); ctx.strokeStyle=PAL[7]; ctx.beginPath();ctx.moveTo(2,a.y+0.5);ctx.lineTo(a.x-14.5,a.y+0.5);ctx.stroke();}
     for(const n of this.map.nodes){const {x,y}=this.nodeXY(n), N=NODE[n.type];
-      const done=run.done.includes(n.id), avail=ch.includes(n), sel=avail&&ch[this.sel]===n, seen=pd.seen.includes(n.id);
+      const done=run.done.includes(n.id), avail=ch.includes(n), sel=avail&&ch[this.sel]===n;
       const bc=sel?((this.t/8|0)%2?7:1):avail?7:done?5:11;
       frame(x-14,y-12,28,25,bc,0);
       if(avail)hit(x-16,y-14,32,29,()=>{const i=ch.indexOf(n); if(this.sel===i)KP.Enter=true; else {this.sel=i;SND.sfx('sel');}});
       ctx.globalAlpha=(avail||done)?1:0.45; spr((MAPICONF[this.pi]||[])[n.id]??N.icon,x,y,done?11:N.c,{mc1:done?12:15}); ctx.globalAlpha=1;
-      if(seen&&!done)rect(x+10,y+9,2,2,5);
+      {const c=nodeVisits(pd,n.id), t=String(c), bw=t.length*4+3; rect(x+14-bw,y+6,bw,7,0); txt(t,x+14-bw/2,y+7,c?13:11,5,'center');}   // times cleared
       if(questsOnNode(this.pi,n.id).length&&((this.t/15|0)%2))txt('!',x+12,y-19,7,8,'center');
       if(run.pos===n.id)spr(shipFrame(this.t),x,y-23,14);
     }
@@ -2614,7 +2648,7 @@ ST.map={
       if(TOUCH.on){frame(W/2-70,H-28,60,14,10,0);txt('Leave',W/2-40,H-25,10,6,'center');hit(W/2-72,H-30,64,18,()=>{KP.Enter=true;});
         frame(W/2+10,H-28,60,14,5,0);txt('Stay',W/2+40,H-25,13,6,'center');hit(W/2+8,H-30,64,18,()=>{KP.Escape=true;});}
       else txt('Fire: leave   Esc: stay',W/2,H-24,15,6,'center');}
-    else if(n){const qs=questsOnNode(this.pi,n.id);
+    else if(n){const qs=questsOnNode(this.pi,n.id).concat(questSet(this.pi).filter(x=>x.q.node<0&&x.s.st==='active'));
       frame(8,H-44,W-16,38,NODE[n.type].c,0);
       txt(n.name,16,H-40,1,8); txt(NODE[n.type].name,W-16,H-39,NODE[n.type].c,6,'right');
       txt(n.desc,16,H-28,15,6);
@@ -3058,7 +3092,7 @@ function killEnemy(L,e){
   if(e.mini){spawnPick(L,e.x,e.y,'cap'); spawnPick(L,e.x+12,e.y+8,'cash'); for(let k=0;k<3;k++)L.fx.push({x:e.x+(L.r()-0.5)*40,y:e.y+(L.r()-0.5)*30,t:-k*6,big:false});}
   // kills pay 5% more per reinforcement level; on a DANGER planet they pay less the more outmatched you are, so dying there isn't a way to farm
   const cr=e.val*(0.08+L.d*0.025)*(L.danger?(L.R/0.8)**2:1+Math.max(0,L.heat)*0.05), gain=L.danger?Math.floor(cr+L.r()):Math.max(1,Math.round(cr)); G.credits+=gain; L.earned+=gain; G.stats.kills++;
-  questEvent(e.rock?'rock':'kill',L.pi,L.node.id);
+  questEvent(e.rock?'rock':'kill',L.pi,L.node.id,{rf:!!e.rf});
   if(e.fid){const f=L.forms[e.fid]; f.k++; if(f.k>=f.n)podChance(L,e.x,e.y);}
   if(e.cannon&&L.r()<0.2)podChance(L,e.x,e.y);
   const beh=e.T&&e.T.beh;
@@ -3386,7 +3420,7 @@ ST.level={
     const pd=G.planets[L.pi];
     G.stats.levels++;
     if(L.type==='boss'){pd.freed++; G.stats.guardians++; questEvent('guardian',L.pi,11,{path:run?run.done:[]}); pd.run=null;}
-    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); storeCarry(L);} if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
+    else { if(run){run.pos=L.node.id; run.done.push(L.node.id); storeCarry(L);} pd.vc=pd.vc||[]; pd.vc[L.node.id]=nodeVisits(pd,L.node.id)+1; if(!pd.seen.includes(L.node.id))pd.seen.push(L.node.id);
       questEvent('clear',L.pi,L.node.id,{flawless:!L.lost}); }
     save();
   },
