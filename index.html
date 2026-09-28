@@ -125,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.25</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.26</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -666,7 +666,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.25';
+const VERSION='2.26';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -2655,17 +2655,27 @@ function powerChain(){const idx=id=>POWERS.findIndex(P=>P.id===id);
   return [...POWERS.filter(P=>!('lock' in P)&&P.id!=='wing').map(P=>idx(P.id)), idx('wing'), ...(G.pwUnlocked||[]).map(idx).filter(i=>i>=0)];}
 function nextPower(i){const c=powerChain(), k=c.indexOf(i); return c[(k+1)%c.length];}
 const SPRAYC=[2,7,5,14,4,3,10,13,8];
-const REINF_SUB=['','More ships, heavier armour','Armour up again, more fire','Enemies fire spreads','Bullet storms begin','Full bullet storm, heavy spreads'];
-const reinfSub=h=>REINF_SUB[h]||(h<8?'They keep coming':h<11?'An endless swarm':'Everything they have');
-// a reinforcement wave from the planet's own ships, sized by the level (a second, mirrored one from level 6)
+// A reinforcement wave: the planet's own ships in reinforcement colours (tougher, and they pay more), sized by the level.
+// They come from ahead, above or below; from level 3 also from behind, from level 4 as hunters, and from level 6 a second
+// wave closes in from another side. The top bar's Reinf indicator names the side, and off-front waves wait a moment for it.
+// Colours per planet, 3 tiers (levels 1-3, 4-6, 7+), picked to stand out from that planet's own ships; they get white plating.
+const RFCOL=[[3,13,4],[13,2,4],[8,2,4],[8,2,4],[8,2,4],[13,7,8],[3,13,4]];
+const RDIR={ahead:'AHEAD',above:'ABOVE',below:'BELOW',behind:'BEHIND',hunt:'HUNTERS'};
 function reinforce(L,h,small=false){
-  const pat=pick(L.r,h>=4?['line','sine','swoop','dive','chase']:['line','sine','swoop','dive']);   // from level 4 some waves hunt you
-  const n=Math.min(11,small?2+Math.ceil(h/2):3+h); spawnForm(L,{kind:'form',e:pick(L.r,L.wavePool),n:pat==='chase'?Math.ceil(n/2):n,pat});
-  // from level 8 the second wave comes in from behind
-  if(!small&&h>=6)spawnForm(L,{kind:'form',e:pick(L.r,L.wavePool),n:Math.min(11,h-1),pat:h>=8?'left':pick(L.r,['sine','line']),mirror:true});
+  const sc=SCENE[L.sc], dirs=['ahead','ahead'];
+  if(!sc.ceil)dirs.push('above'); if(!sc.ceil&&!sc.floor&&!sc.water)dirs.push('below');
+  if(h>=3)dirs.push('behind'); if(h>=4)dirs.push('hunt');
+  const d1=pick(L.r,dirs); rfWave(L,h,d1,Math.min(11,small?2+Math.ceil(h/2):3+h));
+  let d2=null; if(!small&&h>=6){const rest=dirs.filter(d=>d!==d1&&d!=='hunt'); d2=rest.length?pick(L.r,rest):'ahead'; rfWave(L,h,d2,Math.min(11,h-1));}
+  const off=[d1,d2].find(d=>d&&d!=='ahead');
+  if(!small||off)L.rwarn={t:small?70:150,dir:RDIR[off||d1]};   // top-ups only get a word when they come from off the front
+}
+function rfWave(L,h,dir,n){
+  const pat=dir==='ahead'?pick(L.r,['line','sine','swoop']):dir==='above'||dir==='below'?'dive':dir==='behind'?'left':'chase';
+  spawnForm(L,{kind:'form',e:pick(L.r,L.wavePool),n:pat==='chase'?Math.ceil(n/2):n,pat,side:dir,rf:h<=3?1:h<=6?2:3,late:dir==='ahead'||dir==='hunt'?0:45});
 }
 // what the level does: above 0 the enemy gets tougher and busier; below 0 (stand-down, only on planets in your range) it holds back.
-// Stand-down is never shown to the player: no banner, and the HUD reads as level 0.
+// Stand-down has no banner or sound; the top bar shows it quietly as green pips.
 const lvArm=h=>h>=0?1+0.3*h:1/(1-0.15*h);     // ships' armour
 const lvFire=h=>h>=0?1+0.3*h:1/(1-0.25*h);    // ships' rate of fire (and how soon they open fire)
 const lvShot=h=>Math.max(0.75,1+0.05*h);      // bullet speed
@@ -2832,12 +2842,12 @@ function spawnForm(L,ev){
   if(pat==='dive'&&SCENE[L.sc].ceil)pat='sine';
   const span=L.yBot-L.yTop; const amp=Math.min(18+r()*34,span/2-6), w=0.035+r()*0.035;
   let y0=L.yTop+8+r()*(span-16); if(ev.mirror)y0=L.yTop+L.yBot-y0; if(pat==='sine')y0=clamp(y0,L.yTop+amp,L.yBot-amp);
-  const cx=W*(0.45+r()*0.25), R=Math.min(40+r()*18,span/2-4), top=closed?true:r()<0.5;
+  const cx=W*(0.45+r()*0.25), R=Math.min(40+r()*18,span/2-4), top=ev.side==='above'?true:ev.side==='below'?false:closed?true:r()<0.5;
   if(pat==='loop')y0=clamp(y0,L.yTop+R,L.yBot-R);
   const fid=++L.fid; L.forms[fid]={n:ev.n,k:0};
   for(let i=0;i<ev.n;i++){
-    const e={type:ev.e.t,T,c:ev.e.c,pat,t:0,delay:i*(pat==='dive'?(T.wide?18:10):Math.max(14,Math.ceil((T.wide?56:31)/Math.abs(sp)))),arm:L.heat,sf,hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*lvArm(L.heat)*(ev.elite?2.2:1),elite:ev.elite,fid,
-      val:Math.round(T.val*(ev.elite?2:1)),fc:(120+r()*200)/lvFire(L.heat),flash:0,flip:fromLeft,rad:T.wide?13:9,
+    const e={type:ev.e.t,T,c:ev.rf?RFCOL[L.pi][ev.rf-1]:ev.e.c,rf:ev.rf||0,pat,t:0,delay:(ev.late||0)+i*(pat==='dive'?(T.wide?18:10):Math.max(14,Math.ceil((T.wide?56:31)/Math.abs(sp)))),sf,hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*lvArm(L.heat)*(ev.elite?2.2:1)*(ev.rf?1.3+0.2*ev.rf:1),elite:ev.elite,fid,
+      val:Math.round(T.val*(ev.elite?2:1)*(ev.rf?1.5:1)),fc:(120+r()*200)/lvFire(L.heat),flash:0,flip:fromLeft,rad:T.wide?13:9,
       x:fromLeft?-(T.wide?26:14):W+(T.wide?26:14),y:y0,y0,vx:fromLeft?sp:-sp,vy:0,amp,w,ph:i*0.55,cx,R,a:0,turnAt:W*(0.45+r()*0.2),ex:false};
     if(pat==='dive'){e.x=W*(0.55+r()*0.35)+i*6; e.y=top?-12:PB+12; e.vy=(top?2.3:-2.3)*sf; e.vx=-sp*0.7;}
     L.en.push(e);
@@ -3117,7 +3127,7 @@ function updateEnemy(L,e){
   if(e.ex&&(e.x<-40||e.x>W+50||e.y<-50||e.y>H+40)){e.dead=true; if(e.fid)L.kEMA*=0.92;}   // it got away
   if(!e.rock&&e.pat!=='jump'&&(L.d>=2||L.heat>=(L.pi===6?2:1)||e.elite||e.turret)){ e.fc--; if(e.fc<=0&&e.x<W-6&&e.x>8){
     e.fc=Math.max(50,(e.turret?110:320-L.d*20))*(e.elite?0.55:1)*(0.7+L.r()*0.6)/(1+L.ng*0.4);
-    e.fc/=lvFire(L.heat)*L.ease*L.ease; const n=L.pi===6?1:L.heat>=5?5:L.heat>=3?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
+    e.fc/=lvFire(L.heat)*L.ease*L.ease*(e.rf?1.25:1); const n=L.pi===6?1:L.heat>=5?5:L.heat>=3?3:1; for(let i=0;i<n;i++)aimShot(L,e.x,e.y,1.5+L.d*0.14,(i-(n-1)/2)*0.2); } }
 }
 
 function updateBoss(L){
@@ -3231,13 +3241,13 @@ ST.level={
     // reinforcements only arrive in the main part of a stage (not once its time is up, not during a boss fight),
     // and every warning brings a wave with it
     const open=L.t<L.len&&!L.boss&&L.state==='play';
-    if(L.t===210&&L.heat>0&&!L.banner&&open){L.banner={t:0,dur:170,title:'WARNING',sub:'Reinforcements level '+L.heat,sub2:L.danger?'Your ship is outmatched here':reinfSub(L.heat),col:2}; SND.sfx('alarm'); L.heatMax=L.heat; reinforce(L,L.heat);}
+    if(L.t===210&&L.heat>0&&open){SND.sfx('alarm'); L.heatMax=L.heat; reinforce(L,L.heat);}
     if(L.t%30===0){   // every half second: the level your equipment earns, plus the surge (12 s untouched while killing most of them: +1 every 10 s)
       const quiet=L.t-L.lastHitT;
       if(L.state==='play'&&L.surge<0){if(quiet>480)L.surge=Math.min(0,L.surge+0.05);}   // easing wears off after 8 s without a hit, a level every 10 s
       else if(quiet>720&&L.kEMA>=0.6&&L.state==='play')L.surge+=0.05;
       const h=heatLevel(L,heatOf(L));
-      if(h>L.heatMax&&h>0&&L.t>210&&open){L.banner={t:0,dur:170,title:'WARNING',sub:'Reinforcements level '+h,sub2:reinfSub(h),col:2}; SND.sfx('alarm'); L.heatMax=h; L.heat=h; reinforce(L,h);} L.heat=h;
+      if(h>L.heatMax&&h>0&&L.t>210&&open){SND.sfx('alarm'); L.heatMax=h; L.heat=h; reinforce(L,h);} L.heat=h;
       // and they keep coming: with fewer ships on screen than the reinforcement level, a small wave tops it up
       if(open&&h>0&&L.t>240&&L.t%240===0&&L.en.filter(e=>!e.dead&&e.fid).length<h)reinforce(L,h,true);}
     if(L.heat>=4&&L.t%(L.heat>=5?Math.max(100,200-(L.heat-5)*20):320)===120){const on=L.en.filter(e=>!e.dead&&e.delay<=0&&!e.rock&&!e.cannon&&!e.turret&&e.x>40&&e.x<W-10); for(let k=0;k<Math.min(3,on.length);k++){const e=on[Math.floor(L.r()*on.length)]; const nr=L.heat>=5?16:12; for(let i=0;i<nr;i++){const a=i/nr*TAU+L.t; ebPush(L,{x:e.x,y:e.y,vx:Math.cos(a)*1.3*L.sm,vy:Math.sin(a)*1.3*L.sm,t:0});}}}
@@ -3354,7 +3364,7 @@ ST.level={
         if(k.kind==='cap')p.bar=nextPower(p.bar); } }
     }
     for(const k of L.pk){k.t++;k.x+=k.vx;k.y+=Math.sin(k.t*0.05)*0.3; if(k.x<-20)k.dead=true;}
-    for(const f of L.fx)f.t++; for(const a of L.arcs)a.t++; L.arcs=L.arcs.filter(a=>a.t<9); if(L.banner&&++L.banner.t>L.banner.dur)L.banner=null;
+    for(const f of L.fx)f.t++; for(const a of L.arcs)a.t++; L.arcs=L.arcs.filter(a=>a.t<9); if(L.banner&&++L.banner.t>L.banner.dur)L.banner=null; if(L.rwarn&&--L.rwarn.t<=0)L.rwarn=null;
     L.pb=L.pb.filter(b=>!b.dead); L.eb=L.eb.filter(b=>!b.dead); L.en=L.en.filter(e=>!e.dead);
     L.pk=L.pk.filter(k=>!k.dead); L.fx=L.fx.filter(f=>f.t<(f.text?50:f.big?28:f.puff?10:f.spark?6:f.splash?24:21));
     if(L.state==='play'){
@@ -3390,7 +3400,7 @@ ST.level={
       if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.cells.ov&&!(e.flash>2))for(const q of e.cells.ov)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,1); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
-      else sprT(e.T,e.t,e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2,mc1:(e.arm||0)>=2?1:15}); }  // armoured reinforcements get bright white plating
+      else sprT(e.T,e.t,e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2,mc1:e.rf?1:15}); }  // reinforcement ships: their own colour and bright white plating
     const B=L.boss;
     if(B){ const dying=B.dead&&(B.deathT&4);
       if(!dying){for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1}); if(!(B.flash>1))for(const c of B.ov)spr(c.b,B.x+c.ox,B.y+c.oy,1);}
@@ -3446,7 +3456,9 @@ ST.level={
     const P=PLANETS[L.pi]; if(L.ng)txt('NG+'+L.ng,122,2,10,6); txt(P.name+': '+L.node.name,4,2,P.shades[2]===1?P.shades[1]:P.shades[2],6);
     if(L.intro>0&&!L.banner){ if(L.intro>20||(L.intro&2)){txtO(L.node.name,W/2,H/2-40,1,14,'center'); txtO(L.node.desc,W/2,H/2-18,15,6,'center');}}
     const prog=Math.min(1,L.t/L.len);
-    if(L.heat>5)txt('Reinf '+L.heat,292,2,2,5); else {txt('Reinf',292,2,11,5); for(let k=0;k<5;k++)rect(316+k*5,4,4,4,k<L.heat?[7,7,8,8,2][k]:11);}
+    {const w=L.rwarn, bl=!!w&&((L.t>>3)&1);   // green pips: they're easing off; a new wave: the label names its side and flashes
+     if(L.heat>5)txt((w?w.dir:'Reinf')+' '+L.heat,292,2,bl?7:2,5);
+     else {txt(w?w.dir:'Reinf',313,2,w?(bl?7:2):11,5,'right'); for(let k=0;k<5;k++)rect(316+k*5,4,4,4,L.heat<0?(k<-L.heat?5:11):k<L.heat?(bl?1:[7,7,8,8,2][k]):11);}}
     rect(160,4,70,4,11); rect(160,4,70*prog,4,5);
     {const mi=L.en.find(e=>e.mini&&!e.dead&&e.delay<=0&&e.x<W);
      const bb=B&&!B.dead?{hp:B.hp,max:B.maxhp,name:L.type==='boss'?L.node.name:'Gunship',vuln:B.vuln}:mi?{hp:mi.hp,max:mi.maxhp,name:mi.secret?'Strange ship':'Heavy ship',vuln:true}:null;
