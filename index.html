@@ -122,7 +122,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.21</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.22</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -663,7 +663,7 @@ const UNLOCK_ORDER=[6,5,4,3,2,1,0]; // Rust first, Ignis last
 'use strict';
 // ================= Delta Odyssey =================
 const W=384,H=240;
-const VERSION='2.21';
+const VERSION='2.22';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -814,10 +814,10 @@ const SND={
       this.kick();
     }catch(e){console.warn(e);}
   },
-  // iPhone/iPad: start sound inside the tap, and ask for 'playback' audio so the silent switch doesn't mute the game
-  kick(){ // once, inside the first tap: ask iOS for 'playback' audio (plays with the silent switch on) and start the sound hardware
+  // iPhone/iPad: start sound inside the tap, and set the audio mode that goes with the music setting (audioMode)
+  kick(){ // once, inside the first tap: set the audio mode and start the sound hardware
     if(this.kicked||!this.ac)return; this.kicked=true;
-    try{ if(navigator.audioSession)navigator.audioSession.type='playback'; }catch(e){}
+    audioMode();
     try{ const b=this.ac.createBuffer(1,1,22050), s=this.ac.createBufferSource(); s.buffer=b; s.connect(this.ac.destination); s.start(0); }catch(e){}
   },
   get live(){return !!(this.ac&&this.ac.state==='running');},
@@ -1092,7 +1092,7 @@ function newGame(){
   return {credits:100,ships:3,power:1,engine:1,shield:1,bombsMax:1,
     wep:{pulse:true,spread:false,laser:false,homing:false,wave:false},
     planets:PLANETS.map(()=>({freed:0,visits:0,run:null,seen:[]})),
-    qs:{},unlocked:7,coop:false,musicOn:true,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
+    qs:{},unlocked:7,coop:false,musicOn:true,ownMusic:false,started:false,ngp:0,ngReady:false,endingSeen:false,stats:{kills:0,levels:0,guardians:0},pwUnlocked:[],newPw:null,weapon:'pulse',laserLv:0,spreadLv:0,homingLv:0,waveLv:0};
 }
 let G=newGame();
 function save(){try{localStorage.setItem(slotKey(SLOT),JSON.stringify(G));}catch(e){}}
@@ -1102,8 +1102,8 @@ function hasSave(){try{return !!localStorage.getItem(slotKey(SLOT));}catch(e){re
 function slotInfo(n){try{const s=localStorage.getItem(slotKey(n)); if(!s)return 'empty'; const o=JSON.parse(s); if(!o.started)return 'empty';
   return (o.planets||[]).filter(p=>p.freed>0).length+'/7 freed, '+(o.credits||0)+' cr'+(o.ngp?', NG+'+o.ngp:'');}catch(e){return 'unreadable';}}
 // switch slot: load its game (or a fresh one); players and music stay as they are
-function useSlot(n){const coop=G.coop, mus=G.musicOn; SLOT=n; try{localStorage.setItem(SLOT_KEY,String(n));}catch(e){}
-  if(!loadSave())G=newGame(); G.coop=coop; G.musicOn=mus;}
+function useSlot(n){const coop=G.coop, mus=G.musicOn, own=G.ownMusic; SLOT=n; try{localStorage.setItem(SLOT_KEY,String(n));}catch(e){}
+  if(!loadSave())G=newGame(); G.coop=coop; G.musicOn=mus; G.ownMusic=own;}
 
 // ---------- quests: 3 fixed quests per planet, some need a certain route ----------
 const isUnlocked=pi=>true;   // every planet is open: the threat against your ship power says where you stand
@@ -2341,7 +2341,7 @@ function go(s,arg){STATE=ST[s]; STATE.enter&&STATE.enter(arg);}
 // ---------- title ----------
 ST.title={
   enter(){tune(TUNES.title); this.sel=1; this.t=0; this.confirm=false;},
-  items(){const a=['Slot '+SLOT+': '+slotInfo(SLOT)]; if(hasSave()&&G.started)a.push(G.ngp?'Continue (New Game+ '+G.ngp+')':'Continue'); if(G.ngReady)a.push('New Game+'); a.push('New game'); a.push('Players: '+(G.coop?'two':'one')); a.push('Music: '+(G.musicOn!==false?'on':'off')); return a;},
+  items(){const a=['Slot '+SLOT+': '+slotInfo(SLOT)]; if(hasSave()&&G.started)a.push(G.ngp?'Continue (New Game+ '+G.ngp+')':'Continue'); if(G.ngReady)a.push('New Game+'); a.push('New game'); a.push('Players: '+(G.coop?'two':'one')); a.push('Music: '+MUSICNAME[musicMode()]); return a;},
   update(){
     this.t++; const it=this.items();
     if(MENU.up){this.sel=(this.sel+it.length-1)%it.length;SND.sfx('sel');this.confirm=false;}
@@ -2354,9 +2354,9 @@ ST.title={
       else if(c==='New Game+'){SND.sfx('ok');startNGPlus();}
       else if(c==='New game'){
         if(hasSave()&&G.started&&!this.confirm){this.confirm=true; SND.sfx('deny'); toast('Slot '+SLOT+' has a game in it. Choose New game again to start over.',180);}
-        else {const coop=G.coop,mus=G.musicOn;G=newGame();G.coop=coop;G.musicOn=mus;G.started=true;save();SND.sfx('ok');this.confirm=false;go('hub',{intro:true});}}
+        else {const coop=G.coop,mus=G.musicOn,own=G.ownMusic;G=newGame();G.coop=coop;G.musicOn=mus;G.ownMusic=own;G.started=true;save();SND.sfx('ok');this.confirm=false;go('hub',{intro:true});}}
       else if(c.startsWith('Players')){G.coop=!G.coop;save();SND.sfx('sel');}
-      else if(c.startsWith('Music')){toggleMusic();}
+      else if(c.startsWith('Music')){toggleMusic(MENU.left?-1:1);}
     }
   },
   draw(){
@@ -2379,12 +2379,20 @@ ST.title={
     it.forEach((s,i)=>{const on=i===this.sel, y=i?105+i*11:104;
       if(i===0)txt((on?'< ':'')+s+(on?' >':''),W/2,y,on?7:12,7,'center'); else txt((on?'> ':'  ')+s,W/2-60,y,on?7:15,8);
       hit(W/2-80,y-3,180,11,()=>{this.sel=i;KP.Enter=true;});});
-    txt(this.sel===0?(TOUCH.on?'Tap to change save slot':'Left/right: change save slot (5 slots)'):TOUCH.on?'Tap to choose':'Arrows or pad to move, Z or Space to choose',W/2,226,11,6,'center');
+    txt(this.sel===0?(TOUCH.on?'Tap to change save slot':'Left/right: change save slot (5 slots)'):(it[this.sel]||'').startsWith('Music')?MUSICHINT[musicMode()]:TOUCH.on?'Tap to choose':'Arrows or pad to move, Z or Space to choose',W/2,226,11,6,'center');
     txt('Version '+VERSION,W-6,6,12,6,'right');
     if(!SND.live&&G.musicOn!==false&&((this.t>>4)&1))txtO(TOUCH.on?'Tap the screen to turn on sound':'Press a key or click to turn on sound',W/2,158,7,6,'center');
   }
 };
-function toggleMusic(){G.musicOn=!(G.musicOn!==false); Music.setOn(G.musicOn); save(); toast('Music '+(G.musicOn?'on':'off'),60);}
+// music: 'on' (the game's tunes), 'own' (no game tunes, so music from another app can play alongside), 'off' (sound effects only)
+const musicMode=()=>G.musicOn!==false?'on':G.ownMusic?'own':'off';
+const MUSICNAME={on:'on',own:'your own',off:'off'}, MUSICHINT={on:'Game music. Choose again to play your own from another app.',
+  own:'Start music in another app: it keeps playing while you play here.',off:'No music, just sound effects.'};
+// iPhone/iPad (the audio session API): 'playback' plays through the silent switch but stops other apps' music; 'ambient' mixes with it
+function audioMode(){try{if(navigator.audioSession)navigator.audioSession.type=musicMode()==='own'?'ambient':'playback';}catch(e){}}
+function toggleMusic(dir=1){const M=['on','own','off'], m=M[(M.indexOf(musicMode())+dir+3)%3];
+  G.musicOn=m==='on'; G.ownMusic=m==='own'; Music.setOn(G.musicOn); audioMode(); save();
+  toast(m==='own'?'Your own music: play it from another app':'Music '+m,m==='own'?150:60);}
 
 // ---------- solar system hub ----------
 ST.hub={
@@ -3503,7 +3511,7 @@ function drawMist(L){ if(L.sky!=='misty'||!L.skyImg)return; const w=W*2, o=((L.w
 function startNGPlus(){
   const keep={credits:G.credits,power:G.power,engine:G.engine,shield:G.shield,bombsMax:G.bombsMax,wep:G.wep,coop:G.coop,
     spreadLv:G.spreadLv,laserLv:G.laserLv,homingLv:G.homingLv,waveLv:G.waveLv,
-    musicOn:G.musicOn,ngp:(G.ngp||0)+1,stats:G.stats,pwUnlocked:G.pwUnlocked||[],weapon:G.weapon||'pulse',ships:Math.max(3,G.ships)};
+    musicOn:G.musicOn,ownMusic:G.ownMusic,ngp:(G.ngp||0)+1,stats:G.stats,pwUnlocked:G.pwUnlocked||[],weapon:G.weapon||'pulse',ships:Math.max(3,G.ships)};
   G=Object.assign(newGame(),keep,{started:true}); save();
   go('hub',{intro:true}); toast('New Game+ '+G.ngp+'. Everything is faster and tougher.',240);
 }
