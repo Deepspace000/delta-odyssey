@@ -12,7 +12,7 @@ This repository contains no Delta graphics or music. When the game opens, drop i
 
 - Player 1: arrow keys to fly, Z or Space to fire, X to switch weapon, C for a smart bomb, V to take a power-up.
 - Player 2: WASD, F, G, H and J.
-- Gamepads work. On a phone or tablet, drag anywhere to fly.
+- Gamepads work, with the buttons shown under the game. A fires; RT turns auto fire on or off (a small AUTO shows in the corner). On a phone or tablet, drag anywhere to fly.
 - Esc pauses. M turns the music on or off.
 
 The game is one self-contained file: `index.html`.
