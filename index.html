@@ -125,7 +125,7 @@ button.plain{background:none;border-color:#505050;color:var(--grey);font-size:.7
 <div id="rotate">Turn your device sideways for a bigger view.</div>
 <div id="loader"><div class="panel">
   <h1>Delta<span>Odyssey</span></h1>
-  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.34</p>
+  <p style="margin-top:.4rem;font-size:.7rem;color:#787878">Version 2.35</p>
   <p>Drop your Delta disk image here (the .d64, or the .zip it came in). The game reads the original sprites and Rob Hubbard's music straight from your disk. Nothing is uploaded.</p>
   <div class="row">
     <label class="btn">Choose disk file<input id="file" type="file" accept=".d64,.zip"></label>
@@ -670,10 +670,13 @@ const SW=384,SH=240,SPB=216;   // the real screen, always
 // Vertical levels (the asteroid mines) run the normal level code in a playfield turned 90 degrees: along the shaft is the
 // level's x (the 203 rows between the top bar and the power strip), across the shaft is its y (the full 384 px width).
 // Everything (weapons, powers, enemies, reinforcements) works unchanged; only drawing and the controls are turned.
-const VW=203; let TOPY=13, VXF=null;
+const VW=203; let TOPY=13, VXF=null, VROT=0;   // VROT: the playfield's turn while a vertical level draws; sprites turn back by it
 function vmode(on){ if(on){W=VW; PB=SW; H=SW+24; TOPY=0;} else {W=SW; H=SH; PB=SPB; TOPY=13;} }
+const vFace=(L,y)=>{const p=L.pl.find(q=>q.alive)||L.pl[0]; return L.vert===1?p.y<y:p.y>y;};   // in a shaft: is the player to this ship's right on screen?
+const vOff=(L,x,y,dx,dy)=>!L.vert?[x+dx,y+dy]:L.vert===1?[x+dy,y-dx]:[x-dy,y+dx];   // a screen offset from a point, in the level's space
+function srect(L,x,y,dx,dy,w,h,c){if(!L.vert)return rect(x+dx,y+dy,w,h,c); if(L.vert===1)rect(x+dy,y-dx-w,h,w,c); else rect(x-dy-h,y+dx,h,w,c);}   // bars and lights over ships keep the screen's way up
 const vIn=(L,a,b)=>!L.vert?[a,b]:L.vert===1?[b,-a]:[-b,a];   // screen direction -> level direction
-const VERSION='2.34';
+const VERSION='2.35';
 const PAL=['#000000','#ffffff','#883932','#67b6bd','#8b3f96','#55a049','#40318d','#bfce72','#8b5429','#574200','#b86962','#505050','#787878','#94e089','#7869c4','#9f9f9f'];
 const PRGB=PAL.map(h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)]);
 const cv=document.getElementById('game'), ctx=cv.getContext('2d');
@@ -746,11 +749,15 @@ function sprImg(b,c,mc1=15,mc3=0,flip=false,flash=false){
   x.putImageData(id,0,0); sprCache.set(key,cnv); return cnv;
 }
 // an enemy type's current frame; wide types are two sprites, swapped and mirrored when they fly in from the left
-function sprT(T,t,x,y,c,o={}){const k=((t/T.an)|0)%T.fr.length;
+function sprT(T,t,x,y,c,o={}){
+  if(VROT&&T.wide){const v=VROT; ctx.save(); ctx.translate(Math.round(x),Math.round(y)); ctx.rotate(-v); VROT=0; try{sprT(T,t,0,0,c,o);}finally{VROT=v; ctx.restore();} return;}   // a two-part sprite turns back as one
+  const k=((t/T.an)|0)%T.fr.length;
   if(!T.wide){spr(T.fr[k],x,y,c,o); if(T.ov&&!o.flash)spr(T.ov[k],x,y,1,{flip:o.flip}); return;}
   const d=o.flip?-12:12; spr(T.fr[k],x-d,y,c,o); spr(T.fr2[k],x+d,y,c,o);
   if(T.ov&&!o.flash){spr(T.ov[k],x-d,y,1,{flip:o.flip}); spr(T.ov2[k],x+d,y,1,{flip:o.flip});}}
-function spr(b,x,y,c,o={}){ctx.drawImage(sprImg(b,c,o.mc1??15,o.mc3??0,!!o.flip,!!o.flash),Math.round(x-12),Math.round(y-10));}
+function spr(b,x,y,c,o={}){const im=sprImg(b,c,o.mc1??15,o.mc3??0,!!o.flip,!!o.flash);
+  if(VROT){ctx.save(); ctx.translate(Math.round(x),Math.round(y)); ctx.rotate(-VROT); ctx.drawImage(im,-12,-10); ctx.restore(); return;}   // vertical levels: ships stay horizontal
+  ctx.drawImage(im,Math.round(x-12),Math.round(y-10));}
 
 // ---------- input ----------
 const K={}; let KP={};
@@ -3379,12 +3386,13 @@ const RFCOL=[[3,13,4],[13,2,4],[8,2,4],[8,2,4],[8,2,4],[13,7,8],[3,13,4]];
 const RDIR={ahead:'AHEAD',above:'ABOVE',below:'BELOW',behind:'BEHIND',hunt:'HUNTERS'};
 function reinforce(L,h,small=false){
   const sc=SCENE[L.sc], dirs=['ahead','ahead'];
-  if(!sc.ceil)dirs.push('above'); if(!sc.ceil&&!sc.floor&&!sc.water)dirs.push('below');
+  const shaft=L.sc==='v'; if(!sc.ceil||shaft)dirs.push('above'); if(shaft||(!sc.ceil&&!sc.floor&&!sc.water))dirs.push('below');
   if(h>=3)dirs.push('behind'); if(h>=4)dirs.push('hunt');
   const d1=pick(L.r,dirs); rfWave(L,h,d1,Math.min(11,small?2+Math.ceil(h/2):3+h));
   let d2=null; if(!small&&h>=6){const rest=dirs.filter(d=>d!==d1&&d!=='hunt'); d2=rest.length?pick(L.r,rest):'ahead'; rfWave(L,h,d2,Math.min(11,h-1));}
   const off=[d1,d2].find(d=>d&&d!=='ahead');
-  if(!small||off)L.rwarn={t:small?70:150,dir:RDIR[off||d1]};   // top-ups only get a word when they come from off the front
+  const vw=d=>!L.vert?RDIR[d]:({ahead:L.vert===1?'BELOW':'ABOVE',behind:L.vert===1?'ABOVE':'BELOW',above:L.vert===1?'RIGHT':'LEFT',below:L.vert===1?'LEFT':'RIGHT',hunt:'HUNTERS'})[d];
+  if(!small||off)L.rwarn={t:small?70:150,dir:vw(off||d1)};   // top-ups only get a word when they come from off the front
 }
 function rfWave(L,h,dir,n){
   const pat=dir==='ahead'?pick(L.r,['line','sine','swoop']):dir==='above'||dir==='below'?'dive':dir==='behind'?'left':'chase';
@@ -3531,6 +3539,7 @@ function buildLevel(pi,node){
   if(stage===3){const r2=mulberry(pi*31+node.id*7); const p=L.pool.slice(); const mix=[]; while(mix.length<3&&p.length)mix.push(p.splice(Math.floor(r2()*p.length),1)[0]); L.wavePool=mix;}
   else L.wavePool=[stage===4?L.pool[0]:L.pool[(node.id*2+pi)%L.pool.length]];
   const lenS={assault:48,asteroids:42,ambush:46,elite:34,cache:24,boss:6}[node.type]||40;
+  const shaftPats=['dive','dive','sine','sine','left','chase'];   // a shaft: out of the walls, weaving up or down, from behind
   L.len=lenS*60;
   const pats={assault:['line','sine','swoop','loop','dive','chase','sine'],asteroids:['line','sine','swoop'],ambush:['line','sine','dive','swoop','left','left','chase'],
     elite:['sine','swoop','loop','chase'],cache:['line','sine'],boss:['sine','line']}[node.type];
@@ -3538,7 +3547,7 @@ function buildLevel(pi,node){
   while(t<L.len){
     const gap=Math.max(45,(165-d*11)*(0.7+r()*0.6)/(1+NG*0.3))*(node.type==='elite'?1.3:node.type==='cache'?1.6:1);
     if(node.type==='asteroids'&&r()<0.65) L.ev.push({t,kind:'rocks',n:2+Math.floor(r()*3)});
-    else L.ev.push({t,kind:'form',pat:pick(r,pats),e:pick(r,L.wavePool),n:4+Math.floor(r()*4)+(d>4?1:0),elite:node.type==='elite'});
+    else L.ev.push({t,kind:'form',pat:pick(r,A?shaftPats:pats),e:pick(r,L.wavePool),n:4+Math.floor(r()*4)+(d>4?1:0),elite:node.type==='elite'});
     if(node.type==='cache'&&r()<0.8)L.ev.push({t:t+30,kind:'cashline'});
     if(node.type!=='asteroids'&&r()<0.18)L.ev.push({t:t+50,kind:'rocks',n:1+Math.floor(r()*2)});
     t+=gap;
@@ -3580,17 +3589,20 @@ function spawnForm(L,ev){
   const r=L.r, T=ETYPES[ev.e.t], d=L.d, sf=lvSpd(L.heat), sp=(1.5+d*0.13)*(ev.pat==='chase'?0.8:1)*L.sm*L.ease*sf;
   const fromLeft=ev.pat==='left'; let pat=fromLeft?pick(r,['line','sine']):ev.pat;
   const closed=SCENE[L.sc].ceil||SCENE[L.sc].floor||SCENE[L.sc].water;
-  if(pat==='dive'&&SCENE[L.sc].ceil)pat='sine';
+  if(pat==='dive'&&SCENE[L.sc].ceil&&L.sc!=='v')pat='sine';   // in a shaft, 'dive' means bursting out of the wall
   const span=L.yBot-L.yTop; const amp=Math.min(18+r()*34,span/2-6), w=0.035+r()*0.035;
   let y0=L.yTop+8+r()*(span-16); if(ev.mirror)y0=L.yTop+L.yBot-y0; if(pat==='sine')y0=clamp(y0,L.yTop+amp,L.yBot-amp);
   const cx=W*(0.45+r()*0.25), R=Math.min(40+r()*18,span/2-4), top=ev.side==='above'?true:ev.side==='below'?false:closed?true:r()<0.5;
   if(pat==='loop')y0=clamp(y0,L.yTop+R,L.yBot-R);
   const fid=++L.fid; L.forms[fid]={n:ev.n,k:0};
+  const hx=pat==='dive'&&L.sc==='v'?W*(0.3+r()*0.45):0;   // where the hole breaks open
   for(let i=0;i<ev.n;i++){
-    const e={type:ev.e.t,T,c:ev.rf?RFCOL[L.pi][ev.rf-1]:ev.e.c,rf:ev.rf||0,pat,t:0,delay:(ev.late||0)+i*(pat==='dive'?(T.wide?18:10):Math.max(14,Math.ceil((T.wide?56:31)/Math.abs(sp)))),sf,hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*lvArm(L.heat)*(ev.elite?2.2:1)*(ev.rf?1.3+0.2*ev.rf:1),elite:ev.elite,fid,
+    const e={type:ev.e.t,T,c:ev.rf?RFCOL[L.pi][ev.rf-1]:ev.e.c,rf:ev.rf||0,pat,t:0,delay:(ev.late||0)+i*(pat==='dive'?(L.sc==='v'?8:T.wide?18:10):Math.max(14,Math.ceil((T.wide?56:31)/Math.abs(sp)))),sf,hp:T.hp*(1+d*0.12)*(1+L.ng*0.5)*lvArm(L.heat)*(ev.elite?2.2:1)*(ev.rf?1.3+0.2*ev.rf:1),elite:ev.elite,fid,
       val:Math.round(T.val*(ev.elite?2:1)*(ev.rf?1.5:1)),fc:(120+r()*200)/lvFire(L.heat),flash:0,flip:fromLeft,rad:T.wide?13:9,
       x:fromLeft?-(T.wide?26:14):W+(T.wide?26:14),y:y0,y0,vx:fromLeft?sp:-sp,vy:0,amp,w,ph:i*0.55,cx,R,a:0,turnAt:W*(0.45+r()*0.2),ex:false};
-    if(pat==='dive'){e.x=W*(0.55+r()*0.35)+i*6; e.y=top?-12:PB+12; e.vy=(top?2.3:-2.3)*sf; e.vx=-sp*0.7;}
+    if(pat==='dive'){e.x=W*(0.55+r()*0.35)+i*6; e.y=top?-12:PB+12; e.vy=(top?2.3:-2.3)*sf; e.vx=-sp*0.7;
+      if(L.sc==='v'){e.x=hx; e.vx=-sp*0.35; e.vy=(top?1:-1)*Math.min(4.6,1.5+0.45*i)*sf; e.y=top?ceilY(L,hx)-4:floorY(L,hx)+4; e.inWall=1;   // out of a hole in the shaft wall
+        if(i===0){L.fx.push({hole:1,wx:L.wx+hx,top,t:0}); const wy=top?ceilY(L,hx)+2:floorY(L,hx)-2; for(let k=0;k<5;k++)L.fx.push({x:hx+(r()-0.5)*18,y:wy+(r()-0.5)*4,t:0,spark:true});}}}
     L.en.push(e);
   }
 }
@@ -3605,6 +3617,10 @@ function spawnMeteor(L,delay){
 }
 // a mineral deposit set in the shaft wall: shoot it and it breaks into minerals to pick up
 function makeOre(L,side){return {ore:true,pat:'ore',type:'ore',side,x:W+14,y:0,t:0,delay:0,hp:2+L.d*0.5,val:0,rad:8,fc:1e9,flash:0,ex:true,chunks:2+Math.floor(L.d/2),hs:ihash(L.t*7+L.fid)};}
+// a hole broken in the shaft wall, where enemy ships come out; it flickers away after a while
+function drawHole(L,f){const x=Math.round(f.wx-L.wx); if(x<-16||x>W+16||(f.t>=150&&((f.t>>1)&1)))return;
+  const top=f.top, y=Math.round(top?ceilY(L,x):floorY(L,x));
+  for(let k=0;k<=10;k++){const hw=Math.round(11*Math.sqrt(1-(k/11)**2)), row=top?y-1-k:y+k; rect(x-hw-1,row,hw*2+2,1,12); if(k<10)rect(x-hw,row,hw*2,1,0);}}
 function drawOre(L,e){const A=ASTEROIDS[L.ast], up=e.side==='up', s=up?-1:1, hl=e.flash>2;
   for(let q=0;q<4;q++){const hh=5+((e.hs>>>(q*3))%7), x=e.x-6+q*4, c=hl?1:A.vein[q%2]; rect(x,up?e.y-hh:e.y,3,hh,c); rect(x,up?e.y-hh:e.y+hh-1,1,1,1);}
   if(((L.t>>2)+e.hs)%30<3)rect(e.x-1,e.y+s*6,3,1,1);}
@@ -3634,7 +3650,7 @@ function spawnJumpers(L,n){
 }
 function spawnMini(L,secret){
   const P=PLANETS[L.pi], hp=(24+L.d*7)*(1+L.ng*0.5)*lvBig(L.heat)*(secret?1.4:1);
-  L.en.push({mini:true,pat:'miniboss',type:'mini',cells:MINIART[L.pi],c:BOSSDESIGN[L.pi].col||(P.shades[1]===1?P.shades[2]:P.shades[1]),x:W+30,y:(L.yTop+L.yBot)/2,tx:W-70,
+  L.en.push({mini:true,pat:'miniboss',type:'mini',cells:MINIART[L.pi],c:BOSSDESIGN[L.pi].col||(P.shades[1]===1?P.shades[2]:P.shades[1]),x:W+30,y:(L.yTop+L.yBot)/2,tx:L.vert?W*0.6:W-70,
     hp,maxhp:hp,rad:18,val:60,fc:100,t:0,delay:0,flash:0,ex:true,shot:0,secret});
   toast(secret?'A strange ship appears...':'A heavy ship moves in',110);
 }
@@ -3655,7 +3671,7 @@ function makeBoss(L,mini){
   const ab=!mini&&L.ast!=null, art=mini?GUNART:ab?ABOSSART[L.ast]:BOSSART[L.pi], cols=art.cw, rows=art.ch;
   const place=q=>({b:q.b,ox:(q.c-(cols-1)/2)*24,oy:(q.r-(rows-1)/2)*21}), cells=art.cells.map(place), ov=(art.ov||[]).map(place);
   const w=cols*24,h=rows*21;
-  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:W-w/2-16,w,h,cells,ov,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
+  const B={x:W+w/2+20,y:(L.yTop+L.yBot)/2,tx:L.vert?W*0.55:W-w/2-16,w,h,cells,ov,mini,hp:((mini?40:100)+d*(mini?10:24))*(1+L.ng*0.6),t:0,atk:150,dead:false,deathT:0,
     c:ab?ABOSSDESIGN[L.ast].col:(!mini&&BOSSDESIGN[L.pi].col)||(P.shades[1]===1?14:P.shades[1]),vuln:false,flash:0,turrets:[],core:art.core};
   B.hp*=lvBig(L.heat)*(!mini&&!ab&&L.pi===5?1.35:1); B.maxhp=B.hp;   // the Prism Queen was the softest guardian
   const tpos=art.tur;
@@ -3696,6 +3712,10 @@ function mainPattern(L,p,x,y,mul){
   if(mul!==1)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=mul;
   return cool;
 }
+// vertical levels: every shot leaves sideways toward the way the ship faces (across the shaft) instead of along it
+const laserHitV=(b,e)=>{const s=Math.sign(b.vy)||1; return Math.abs(e.x-b.x)<e.rad*0.8+b.th+1&&(s>0?(e.y>=b.y-b.len-e.rad&&e.y<=b.y+e.rad):(e.y<=b.y+b.len+e.rad&&e.y>=b.y-e.rad));};
+function orientShots(L,s,start){for(let i=start;i<L.pb.length;i++){const b=L.pb[i], sg=Math.sign(b.vx)||1, cx=b.x-10*sg, vx=b.vx, vy=b.vy;
+  b.x=cx; b.y+=s*10*sg; if(b.lo){b.y-=b.lo; b.x-=s*b.lo;} b.vx=-s*vy; b.vy=s*vx; if(b.ay){b.ax=-s*b.ay; b.ay=0;} if(b.kind==='wave'){b.wax=1; b.x0=cx;} b.rot=1;}}
 function fireWeapon(L,p){
   const start=L.pb.length, x=p.x+10, y=p.y;
   p.cool=mainPattern(L,p,x,y,1);
@@ -3703,10 +3723,11 @@ function fireWeapon(L,p){
   const shot=(o)=>L.pb.push(Object.assign({x,y,vx:7,vy:0,dmg:1,kind:'pulse',t:0,pierce:false,r:3,owner:p.id},o));
   const tw=p.pw.twin; if(tw&&L.t>=(p.twinT||0)){p.twinT=L.t+[0,24,22,12,12][tw]; p.twinS=-(p.twinS||1);
     const angs=tw===1?[0.33*p.twinS]:tw<4?[-0.33,0.33]:[-0.45,-0.2,0.2,0.45]; for(const a of angs)shot({vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:[0,0.5,0.6,0.7,0.7][tw]});}
-  const rr=p.pw.rear; if(rr&&(rr>2||L.t>=(p.rearT||0))){p.rearT=L.t+24; for(const o of(rr===1?[0]:[-3,3]))shot({x:p.x-10,y:y+o,vx:-7,dmg:rr===1?0.8:0.9}); if(rr>3)for(const a of[-0.3,0.3])shot({x:p.x-10,vx:-Math.cos(a)*7,vy:Math.sin(a)*7,dmg:0.7});}
+  const rr=p.pw.rear; if(rr&&(rr>2||L.t>=(p.rearT||0))){p.rearT=L.t+24; for(const o of(rr===1?[0]:[-3,3]))shot({x:p.x-10,y:y+o,lo:o,vx:-7,dmg:rr===1?0.8:0.9}); if(rr>3)for(const a of[-0.3,0.3])shot({x:p.x-10,vx:-Math.cos(a)*7,vy:Math.sin(a)*7,dmg:0.7});}
   if(p.pw.spray){const n=[0,1,2,3,5][p.pw.spray]; for(let i=0;i<n;i++){const a=(L.r()-0.5)*1.3, s=5+L.r()*2.5; shot({kind:'spray',vx:Math.cos(a)*s,vy:Math.sin(a)*s,dmg:0.5,col:SPRAYC[Math.floor(L.r()*SPRAYC.length)],r:2});}}
   for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); shot({x:o.x+8,y:o.y,vx:7.5,dmg:0.7});}
   if(p.pw.pierce){const m=[1,0.9,1,1.15,1.3][p.pw.pierce]; for(let i=start;i<L.pb.length;i++){L.pb[i].pierce=true;L.pb[i].dmg*=m;L.pb[i].pst=p.pw.pierce;}}
+  if(L.vert&&p.fy)orientShots(L,p.fy,start);
   {const pk=shipPerks(); if(pk.dmg)for(let i=start;i<L.pb.length;i++)L.pb[i].dmg*=1+pk.dmg; if(pk.rate)p.cool=Math.max(2,Math.round(p.cool/(1+pk.rate)));}   // the ship's perks
   SND.sfx(ownedWeapons()[p.w]==='laser'?'beam':'shot');
 }
@@ -3823,7 +3844,8 @@ function useBomb(L,p){
 }
 
 function updateEnemy(L,e){
-  if(e.delay>0){e.delay--;return;}
+  if(e.delay>0){e.delay--; if(e.inWall)e.x-=L.scroll; return;}
+  if(e.inWall){e.inWall=0; if(e.x<-12||e.x>W+12){e.dead=true; if(e.fid&&L.forms[e.fid])L.forms[e.fid].n--; return;}}
   e.t++; if(e.flash)e.flash--;
   const alive=L.pl.filter(p=>p.alive), tgt=alive[0]||{x:0,y:H/2};
   switch(e.pat){
@@ -3884,7 +3906,7 @@ function updateBoss(L){
   if(B.dead){B.deathT++; if(B.deathT%6===0){boom(L,B.x+(L.r()-0.5)*B.w,B.y+(L.r()-0.5)*B.h,B.deathT%24===0);} if(B.deathT>100){L.boss=null;} return;}
   if(B.lunge>0){B.lunge--; B.x=B.tx-Math.sin((80-B.lunge)/80*Math.PI)*50;}   // the Drill Worm's charge
   else if(B.x>B.tx)B.x-=1.2; else B.x=B.tx+Math.sin(B.t*0.008)*14;
-  const mid=(L.yTop+L.yBot)/2, range=Math.max(0,(L.yBot-L.yTop)/2-B.h/2+8);
+  const mid=(L.yTop+L.yBot)/2, range=L.vert?18:Math.max(0,(L.yBot-L.yTop)/2-B.h/2+8);
   B.y=mid+Math.sin(B.t*0.011)*range;
   B.vuln=B.turrets.every(t=>t.dead);
   B.atk--; if(B.atk<=0&&B.x<W-20){
@@ -3949,7 +3971,7 @@ function drawTerrain(L){
 }
 function drawSolids(L){
   for(const s of L.so){
-    if(s.island){for(const p of s.pieces){if(p.flash)p.flash--; spr(p.b,s.x+p.ox,s.y+p.oy,s.c,{mc1:s.mc1,flash:p.flash>1});}continue;}
+    if(s.island){const v=VROT; VROT=0; for(const p of s.pieces){if(p.flash)p.flash--; spr(p.b,s.x+p.ox,s.y+p.oy,s.c,{mc1:s.mc1,flash:p.flash>1});} VROT=v; continue;}
     const h=s.y1-s.y0;
     ctx.drawImage(tex('metal',[11,12,15]),0,0,s.w,Math.min(96,h),s.x-s.w/2,s.y0,s.w,h); rect(s.x-s.w/2,s.y0,1,h,15); rect(s.x+s.w/2-1,s.y0,1,h,11);
     rect(s.x-s.w/2-1,s.top?s.y1-2:s.y0,s.w+2,2,15);
@@ -4037,6 +4059,7 @@ ST.level={
       const sp=(0.65+G.engine*0.12+p.pw.speed*0.5)*(1+L.ng*0.12)*(1+shipPerks().spd);
       // touch drags are capped to the same top speed, so speed-ups matter on touch too
       const [cx,cy]=vIn(L,c.x,c.y), [tdx,tdy]=vIn(L,td.dx,td.dy);   // the controls turn with a vertical level
+      if(L.vert){ if(c.x>0.3||td.dx>0.6)p.face=1; else if(c.x<-0.3||td.dx<-0.6)p.face=-1; if(!p.face)p.face=1; p.fy=L.vert===1?-p.face:p.face; }   // which way you face across the shaft
       p.tdx=clamp((p.tdx||0)+tdx*1.3,-40,40); p.tdy=clamp((p.tdy||0)+tdy*1.3,-40,40);
       const cap=sp*1.8, mx=clamp(p.tdx,-cap,cap), my=clamp(p.tdy,-cap,cap); p.tdx-=mx; p.tdy-=my;
       p.x=clamp(p.x+cx*sp+mx,12,W-14); p.y=clamp(p.y+cy*sp+my,TOPY+9,PB-10);
@@ -4061,7 +4084,7 @@ ST.level={
       if(p.pw.orbs){p.oa+=0.11; for(let k=0;k<p.pw.orbs;k++){const o=orbPos(p,k);
         for(const e of L.en)if(!e.dead&&e.delay<=0&&dist2(o.x,o.y,e.x,e.y)<(e.rad+5)*(e.rad+5)&&!(L.t%4))damageEnemy(L,e,0.5);
         for(const b of L.eb)if(!b.dead&&dist2(o.x,o.y,b.x,b.y)<30)b.dead=true;}}
-      if(p.pw.bombs&&firing&&--p.bt<=0){const bs=p.pw.bombs; p.bt=[0,44,44,30,24][bs]; p.bside=-(p.bside||1); for(const s of(bs===1?[p.bside]:[-1,1]))L.pb.push({x:p.x,y:p.y+s*4,vx:1.1,vy:s*1.2,ay:s*0.12,kind:'lob',dmg:bs===1?2:2.5,r:4,t:0,owner:p.id,blast:bs===4?24:18});}
+      if(p.pw.bombs&&firing&&--p.bt<=0){const bs=p.pw.bombs, s0=L.pb.length; p.bt=[0,44,44,30,24][bs]; p.bside=-(p.bside||1); for(const s of(bs===1?[p.bside]:[-1,1]))L.pb.push({x:p.x,y:p.y+s*4,vx:1.1,vy:s*1.2,ay:s*0.12,kind:'lob',dmg:bs===1?2:2.5,r:4,t:0,owner:p.id,blast:bs===4?24:18}); if(L.vert&&p.fy)orientShots(L,p.fy,s0);}
       if(p.pw.drones&&--p.dt<=0){p.dt=[0,34,32,30,28][p.pw.drones]; let best=null,bd=1e9; for(const e of L.en){if(e.dead||e.delay>0||e.x>W)continue; const d=dist2(p.x,p.y,e.x,e.y); if(d<bd){bd=d;best=e;}}
         if(best)for(let k=0;k<p.pw.drones;k++){const o=dronePos(L,p,k), a=Math.atan2(best.y-o.y,best.x-o.x); L.pb.push({x:o.x,y:o.y,vx:Math.cos(a)*5,vy:Math.sin(a)*5,dmg:0.7,kind:'dpel',r:2,t:0,owner:p.id});}}
       if(p.pw.arc&&firing&&--p.at<=0){p.at=[0,70,60,50,40][p.pw.arc]; const pts=[{x:p.x+10,y:p.y}]; const hitList=[]; let cx=p.x,cy=p.y;
@@ -4074,17 +4097,18 @@ ST.level={
         p.wx+=(p.x-4-p.wx)*0.12; p.wy+=(clamp(p.y+side*30,L.yTop+4,L.yBot-4)-p.wy)*0.12;
         const sc2=SCENE[L.sc]; if(sc2.floor||sc2.water)p.wy=Math.min(p.wy,floorY(L,p.wx)-9); if(sc2.ceil)p.wy=Math.max(p.wy,ceilY(L,p.wx)+9);
         if(p.winv)p.winv--;
-        if(firing&&--p.wcool<=0){const ws=p.pw.wing; p.wcool=mainPattern(L,p,p.wx+10,p.wy,[0,0.7,0.85,1,1][ws]); if(ws>=3)for(const a of[-0.3,0.3])L.pb.push({x:p.wx+8,y:p.wy,vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:1,kind:'pulse',t:0,r:3,owner:p.id});
-          if(ws>=4&&L.t%3===0)L.pb.push({x:p.wx+8,y:p.wy,vx:2.5,vy:0,dmg:2.2,kind:'homing',t:0,r:4,owner:p.id});}
+        if(firing&&--p.wcool<=0){const ws=p.pw.wing, s0=L.pb.length; p.wcool=mainPattern(L,p,p.wx+10,p.wy,[0,0.7,0.85,1,1][ws]); if(ws>=3)for(const a of[-0.3,0.3])L.pb.push({x:p.wx+8,y:p.wy,vx:Math.cos(a)*7,vy:Math.sin(a)*7,dmg:1,kind:'pulse',t:0,r:3,owner:p.id});
+          if(ws>=4&&L.t%3===0)L.pb.push({x:p.wx+8,y:p.wy,vx:2.5,vy:0,dmg:2.2,kind:'homing',t:0,r:4,owner:p.id}); if(L.vert&&p.fy)orientShots(L,p.fy,s0);}
         let hitW=false;
         for(const b of L.eb)if(!b.dead&&dist2(p.wx,p.wy,b.x,b.y)<36){b.dead=true;hitW=true;}
         for(const e of L.en)if(!e.dead&&e.delay<=0&&dist2(p.wx,p.wy,e.x,e.y)<(e.rad*0.8+6)**2){hitW=true; if(!e.turret&&!e.cannon&&!e.mini)damageEnemy(L,e,3);}
         if(hitW&&!p.winv){p.whp--; p.winv=40; SND.sfx('hit'); if(p.whp<=0){p.whp=0; boom(L,p.wx,p.wy,true); toast('Second ship lost. Take WING again to rebuild it.',140);}}
       }
       if(p.pw.mega){ const ms=p.pw.mega, bd=[0,0.25,0.3,0.4,0.5][ms], bw=[0,2,3,5,7][ms]; if(p.beam>0){p.beam--; const B=L.boss;
-          for(const e of L.en)if(!e.dead&&e.delay<=0&&e.x>p.x&&Math.abs(e.y-p.y)<bw+e.rad*0.7)damageEnemy(L,e,bd);
-          if(B&&!B.dead&&B.vuln&&Math.abs(B.y-p.y)<B.h/2)B.hp-=bd;
-          for(const b of L.eb)if(b.x>p.x&&Math.abs(b.y-p.y)<6)b.dead=true;
+          const sy=L.vert?p.fy:0, ahead=q=>sy?(q.y-p.y)*sy>0&&Math.abs(q.x-p.x)<bw+(q.rad||0)*0.7:q.x>p.x&&Math.abs(q.y-p.y)<bw+(q.rad||0)*0.7;
+          for(const e of L.en)if(!e.dead&&e.delay<=0&&ahead(e))damageEnemy(L,e,bd);
+          if(B&&!B.dead&&B.vuln&&(sy?Math.abs(B.x-p.x)<B.w/2&&(B.y-p.y)*sy>0:Math.abs(B.y-p.y)<B.h/2))B.hp-=bd;
+          for(const b of L.eb)if(sy?(b.y-p.y)*sy>0&&Math.abs(b.x-p.x)<6:b.x>p.x&&Math.abs(b.y-p.y)<6)b.dead=true;
           for(const s of L.so)if(s.island)for(const q of s.pieces.slice())if(s.x+q.ox>p.x&&Math.abs(s.y+q.oy-p.y)<10)hurtPiece(L,s,q,0.4); }
         else if(++p.mt>=[0,240,200,160,130][ms]&&firing){p.mt=0; p.beam=34; SND.sfx('laser');} }
     }
@@ -4094,10 +4118,11 @@ ST.level={
       if(b.kind==='homing'){let best=null,bd=1e9; for(const e of L.en){if(e.dead||e.delay>0)continue;const dd=dist2(b.x,b.y,e.x,e.y);if(dd<bd){bd=dd;best=e;}}
         if(L.boss&&L.boss.vuln&&!L.boss.dead){const dd=dist2(b.x,b.y,L.boss.x,L.boss.y);if(dd<bd)best=L.boss;}
         if(best){const a=Math.atan2(best.y-b.y,best.x-b.x),s=Math.min(6,Math.hypot(b.vx,b.vy)+0.15), cur=Math.atan2(b.vy,b.vx); let da=a-cur; while(da>Math.PI)da-=TAU; while(da<-Math.PI)da+=TAU;
-          const na=cur+clamp(da,-0.12,0.12); b.vx=Math.cos(na)*s; b.vy=Math.sin(na)*s;} else b.vx+=0.1;
-        if(b.t%3===0)L.fx.push({x:b.x-3,y:b.y,t:0,puff:true});}
-      if(b.ay)b.vy+=b.ay;
-      b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25+(b.po||0))*(b.amp??10)*b.ph; else b.y+=b.vy;
+          const na=cur+clamp(da,-0.12,0.12); b.vx=Math.cos(na)*s; b.vy=Math.sin(na)*s;} else if(b.rot)b.vy+=0.1*(Math.sign(b.vy)||1); else b.vx+=0.1;
+        if(b.t%3===0)L.fx.push(b.rot?{x:b.x-b.vx*0.6,y:b.y-b.vy*0.6,t:0,puff:true}:{x:b.x-3,y:b.y,t:0,puff:true});}
+      if(b.ay)b.vy+=b.ay; if(b.ax)b.vx+=b.ax;
+      if(b.wax){b.y+=b.vy; b.x=b.x0+Math.sin(b.t*0.25+(b.po||0))*(b.amp??10)*b.ph;}   // a sideways wave weaves along the shaft
+      else {b.x+=b.vx; if(b.kind==='wave')b.y=b.y0+Math.sin(b.t*0.25+(b.po||0))*(b.amp??10)*b.ph; else b.y+=b.vy;}
       if(b.x>W+20||b.x<-20||b.y<-10||b.y>H+10||b.t>200)b.dead=true;
       else if(terrainHit(L,b.x,b.y,1)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
       else if(L.so.length&&shootSolid(L,b.x,b.y,2,b.blast?0:b.dmg)){b.dead=true; if(b.blast)blast(L,b.x,b.y,b.blast,b.dmg); else L.fx.push({x:b.x,y:b.y,t:0,spark:true});}
@@ -4108,13 +4133,13 @@ ST.level={
     // hits
     for(const b of L.pb){ if(b.dead)continue;
       for(const e of L.en){ if(e.dead||e.delay>0)continue; const rr=e.rad+b.r;
-        if(b.kind==='laser'?(e.x>=b.x-b.len-e.rad&&e.x<=b.x+e.rad&&Math.abs(e.y-b.y)<e.rad*0.8+b.th+1):dist2(b.x,b.y,e.x,e.y)<rr*rr){
+        if(b.kind==='laser'?(b.rot?laserHitV(b,e):(e.x>=b.x-b.len-e.rad&&e.x<=b.x+e.rad&&Math.abs(e.y-b.y)<e.rad*0.8+b.th+1)):dist2(b.x,b.y,e.x,e.y)<rr*rr){
           if(b.hits&&b.hits.includes(e))continue;
           if(b.blast){b.dead=true; blast(L,b.x,b.y,b.blast,b.dmg); break;}
           damageEnemy(L,e,b.dmg); if(b.pierce)(b.hits=b.hits||[]).push(e); else {b.dead=true;break;} } }
       // a shot lined up with a live turret flies on over the hull to it, so every turret can be reached along its row
       const B=L.boss; if(!b.dead&&B&&!B.dead&&Math.abs(b.x-B.x)<B.w/2&&Math.abs(b.y-B.y)<B.h/2
-        &&(B.vuln||!B.turrets.some(t=>!t.dead&&Math.abs(b.y-t.y)<t.rad+b.r+1&&b.x<t.x+t.rad))){
+        &&(B.vuln||!B.turrets.some(t=>!t.dead&&(b.rot?Math.abs(b.x-t.x)<t.rad+b.r+1&&(b.vy>0?b.y<t.y+t.rad:b.y>t.y-t.rad):Math.abs(b.y-t.y)<t.rad+b.r+1&&b.x<t.x+t.rad)))){
         b.dead=true; if(B.vuln){B.hp-=b.dmg;B.flash=3;} else {SND.sfx('clink'); L.fx.push({x:b.x,y:b.y,t:0,spark:true});}}
     }
     for(const p of L.pl){ if(!p.alive)continue;
@@ -4133,7 +4158,7 @@ ST.level={
       if(k.kind==='ore'){k.y+=k.vy; k.vy*=0.94; const q=L.pl.find(p=>p.alive&&dist2(p.x,p.y,k.x,k.y)<48*48); if(q){k.x+=(q.x-k.x)*0.08; k.y+=(q.y-k.y)*0.08;}}}   // minerals drift to a ship that comes close
     for(const f of L.fx)f.t++; for(const a of L.arcs)a.t++; L.arcs=L.arcs.filter(a=>a.t<9); if(L.banner&&++L.banner.t>L.banner.dur)L.banner=null; if(L.rwarn&&--L.rwarn.t<=0)L.rwarn=null;
     L.pb=L.pb.filter(b=>!b.dead); L.eb=L.eb.filter(b=>!b.dead); L.en=L.en.filter(e=>!e.dead);
-    L.pk=L.pk.filter(k=>!k.dead); L.fx=L.fx.filter(f=>f.t<(f.text?50:f.big?28:f.puff?10:f.spark?6:f.splash?24:21));
+    L.pk=L.pk.filter(k=>!k.dead); L.fx=L.fx.filter(f=>f.t<(f.hole?170:f.text?50:f.big?28:f.puff?10:f.spark?6:f.splash?24:21));
     if(L.state==='play'){
       if(L.pl.every(p=>!p.alive&&p.resp<0)){L.state='fail';L.endT=0;stopLongTrack();tune(TUNES.fail);}
       const bossOk=L.bossDue<0||(L.bossMade&&!L.boss);
@@ -4173,21 +4198,24 @@ ST.level={
   draw(){
     const L=LV; if(!L)return;
     ctx.save(); if(L.shake)ctx.translate(((L.r()-0.5)*L.shake)|0,((L.r()-0.5)*L.shake)|0);
-    if(L.vert){vmode(1); if(L.vert===1){ctx.translate(SW,13); ctx.rotate(Math.PI/2); VXF=(x,y)=>[SW-y,13+x];}   // going down: the far end is the bottom
-      else {ctx.translate(0,SPB); ctx.rotate(-Math.PI/2); VXF=(x,y)=>[y,SPB-x];}}                              // going up: the far end is the top
-    drawBack(L); drawSolids(L); drawTerrain(L); drawBands(L); drawMist(L);
+    if(L.vert){vmode(1); if(L.vert===1){ctx.translate(SW,13); ctx.rotate(Math.PI/2); VXF=(x,y)=>[SW-y,13+x]; VROT=Math.PI/2;}   // going down: the far end is the bottom
+      else {ctx.translate(0,SPB); ctx.rotate(-Math.PI/2); VXF=(x,y)=>[y,SPB-x]; VROT=-Math.PI/2;}}                              // going up: the far end is the top
+    drawBack(L); drawSolids(L); drawTerrain(L); drawBands(L); drawMist(L); for(const f of L.fx)if(f.hole)drawHole(L,f);
     for(const e of L.en){ if(e.delay>0)continue;
       if(e.cannon){drawCannon(e);continue;}
       if(e.ore){drawOre(L,e);continue;}
-      if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c; for(const q of e.cells)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.cells.ov&&!(e.flash>2))for(const q of e.cells.ov)spr(q.b,e.x+(q.c-0.5)*24,e.y+(q.r-0.5)*21,1); if(e.secret&&((L.t>>4)&1))txt('?',e.x,e.y-36,7,8,'center'); if(((e.t>>3)&1))rect(e.x-22,e.y-1,3,2,2); rect(e.x-20,e.y-27,40,2,11); rect(e.x-20,e.y-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
+      if(e.mini){const mc=e.secret?((L.t>>3)&1?7:1):e.c, v=VROT; let ox=e.x, oy=e.y;
+        if(v){ctx.save(); ctx.translate(Math.round(e.x),Math.round(e.y)); ctx.rotate(-v); if(vFace(L,e.y))ctx.scale(-1,1); VROT=0; ox=0; oy=0;}
+        for(const q of e.cells)spr(q.b,ox+(q.c-0.5)*24,oy+(q.r-0.5)*21,mc,{flash:e.flash>2}); if(e.cells.ov&&!(e.flash>2))for(const q of e.cells.ov)spr(q.b,ox+(q.c-0.5)*24,oy+(q.r-0.5)*21,1);
+        if(v){VROT=v; ctx.restore();} if(e.secret&&((L.t>>4)&1)){const [qx,qy]=vOff(L,e.x,e.y,0,-36); txt('?',qx,qy,7,8,'center');} if(((e.t>>3)&1))srect(L,e.x,e.y,L.vert&&vFace(L,e.y)?19:-22,-1,3,2,2); srect(L,e.x,e.y,-20,-27,40,2,11); srect(L,e.x,e.y,-20,-27,40*Math.max(0,e.hp/e.maxhp),2,10); continue;}
       if(e.meteor){for(let k=1;k<=6;k++)rect(e.x-e.vx*k*1.7+((L.t*7+k*13)%3)-1,e.y-e.vy*k*1.7,2,2,[7,7,8,8,2,2][k-1]); spr(e.rfr[((e.t>>2)+e.rph)%6],e.x,e.y,8,{mc1:10,flash:e.flash>2}); continue;}
       if(e.rock)spr(e.rfr?e.rfr[((e.t>>3)+e.rph)%6]:e.b,e.x,e.y,e.c,{mc1:12,flash:e.flash>2});
-      else sprT(e.T,e.t,e.x,e.y,e.elite?7:e.c,{flip:e.flip,flash:e.flash>2,mc1:e.rf?1:15}); }  // reinforcement ships: their own colour and bright white plating
+      else sprT(e.T,e.t,e.x,e.y,e.elite?7:e.c,{flip:L.vert?vFace(L,e.y):e.flip,flash:e.flash>2,mc1:e.rf?1:15}); }  // reinforcement ships: their own colour and bright white plating
     const B=L.boss;
     if(B){ const dying=B.dead&&(B.deathT&4);
-      if(!dying){for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1}); if(!(B.flash>1))for(const c of B.ov)spr(c.b,B.x+c.ox,B.y+c.oy,1);}
+      if(!dying){const v=VROT; VROT=0; for(const c of B.cells)spr(c.b,B.x+c.ox,B.y+c.oy,B.c,{flash:B.flash>1}); if(!(B.flash>1))for(const c of B.ov)spr(c.b,B.x+c.ox,B.y+c.oy,1); VROT=v;}
       if(!B.dead){const fr=ETYPES.ring.fr[((B.t/4)|0)%6]; spr(fr,B.x+B.core[0],B.y+B.core[1],B.vuln?((B.t/6|0)%2?2:7):11,{mc1:B.vuln?1:12});}
-      for(const t of B.turrets)if(!t.dead)sprT(t.T,t.t,t.x,t.y,t.c,{flip:!t.T.made,flash:t.flash>2}); }
+      for(const t of B.turrets)if(!t.dead)sprT(t.T,t.t,t.x,t.y,t.c,{flip:L.vert?vFace(L,t.y):!t.T.made,flash:t.flash>2}); }
     for(const k of L.pk){ if(k.kind==='cap'){spr(CAPF[(k.t>>3)%CAPF.length],k.x,k.y,(k.t>>3)&1?2:10);continue;}
       if(k.kind==='cash'){spr(GEMF[(k.t>>3)%GEMF.length],k.x,k.y,7);continue;}
       if(k.kind==='bomb'){spr(BOMBF[(k.t>>3)%2],k.x,k.y,10,{mc1:7});continue;}
@@ -4195,11 +4223,15 @@ ST.level={
       const P=PICKS[k.kind]; if(k.t%30<26||k.x>40)spr(P.b,k.x,k.y,P.c);}
     for(const b of L.pb){
       switch(b.kind){
-        case 'pulse': rect(b.x-4,b.y,8,1,1); rect(b.vx<0?b.x+4:b.x-8,b.y,4,1,b.pst?[0,3,13,7,10][b.pst]:15); if(b.pst>=3)rect(b.vx<0?b.x+8:b.x-12,b.y,4,1,b.pst===4?2:3); break;
+        case 'pulse': if(b.rot){rect(b.x,b.y-4,1,8,1); rect(b.x,b.vy<0?b.y+4:b.y-8,1,4,b.pst?[0,3,13,7,10][b.pst]:15); if(b.pst>=3)rect(b.x,b.vy<0?b.y+8:b.y-12,1,4,b.pst===4?2:3); break;}
+          rect(b.x-4,b.y,8,1,1); rect(b.vx<0?b.x+4:b.x-8,b.y,4,1,b.pst?[0,3,13,7,10][b.pst]:15); if(b.pst>=3)rect(b.vx<0?b.x+8:b.x-12,b.y,4,1,b.pst===4?2:3); break;
         case 'spread': if(b.core){rect(b.x-2,b.y-2,5,4,13); rect(b.x-1,b.y-1,3,2,1);} else {rect(b.x-1,b.y-1,3,3,13); rect(b.x,b.y,1,1,1);} break;
-        case 'laser': {const L0=Math.min(b.len,b.t*11+10), th=b.th; rect(b.x-L0,b.y-th-1,L0,th*2+3,6); rect(b.x-L0+2,b.y-th,L0-2,th*2+1,14); rect(b.x-L0+4,b.y,L0-4,1,1); rect(b.x-2,b.y-th-1,3,th*2+3,(b.t>>1)&1?1:3); break;}
-        case 'homing': rect(b.x-2,b.y-1,5,2,7); rect(b.x+2,b.y-1,1,2,1); break;
-        case 'wave': rect(b.x-2,b.y-3,4,6,4); rect(b.x-1,b.y-2,2,4,10); break;
+        case 'laser': {const L0=Math.min(b.len,b.t*11+10), th=b.th;
+          if(b.rot){const up=b.vy>0, y0=up?b.y-L0:b.y; rect(b.x-th-1,y0,th*2+3,L0,6); rect(b.x-th,up?y0+2:y0,th*2+1,L0-2,14); rect(b.x,up?y0+4:y0,1,L0-4,1); rect(b.x-th-1,up?b.y-2:b.y,th*2+3,3,(b.t>>1)&1?1:3); break;}
+          rect(b.x-L0,b.y-th-1,L0,th*2+3,6); rect(b.x-L0+2,b.y-th,L0-2,th*2+1,14); rect(b.x-L0+4,b.y,L0-4,1,1); rect(b.x-2,b.y-th-1,3,th*2+3,(b.t>>1)&1?1:3); break;}
+        case 'homing': if(b.rot){if(Math.abs(b.vy)>Math.abs(b.vx)){rect(b.x-1,b.y-2,2,5,7); rect(b.x-1,b.vy>0?b.y+2:b.y-2,2,1,1);} else {rect(b.x-2,b.y-1,5,2,7); rect(b.vx<0?b.x-2:b.x+2,b.y-1,1,2,1);} break;}
+          rect(b.x-2,b.y-1,5,2,7); rect(b.x+2,b.y-1,1,2,1); break;
+        case 'wave': if(b.rot){rect(b.x-3,b.y-2,6,4,4); rect(b.x-2,b.y-1,4,2,10); break;} rect(b.x-2,b.y-3,4,6,4); rect(b.x-1,b.y-2,2,4,10); break;
         case 'spray': rect(b.x-1,b.y-1,2,2,b.col); rect(b.x-b.vx*0.6,b.y-b.vy*0.6,1,1,b.col); break;
         case 'dpel': rect(b.x-1,b.y-1,2,2,13); break;
         case 'lob': rect(b.x-2,b.y-2,4,4,10); rect(b.x-1,b.y-1,2,2,1); break;
@@ -4208,31 +4240,34 @@ ST.level={
     for(const p of L.pl){ if(!p.alive)continue;
       for(let k=0;k<p.pw.option;k++){const o=optionPos(p,k); spr(OPTF[(L.t>>2)%OPTF.length],o.x,o.y,(L.t>>3)&1?7:10,{mc1:1});}
       if(p.rsh>0&&(p.rsh>60||((p.rsh>>2)&1))){const c=[3,14,1][(L.t>>2)%3]; ctx.strokeStyle=PAL[c]; ctx.lineWidth=1;
-        for(const rr of[0,2]){ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,17+rr+Math.sin(L.t*0.2),14+rr,0,0,TAU); ctx.stroke();}}
+        for(const rr of[0,2]){ctx.beginPath(); const ex=17+rr+Math.sin(L.t*0.2), ey=14+rr; ctx.ellipse(p.x+0.5,p.y+0.5,L.vert?ey:ex,L.vert?ex:ey,0,0,TAU); ctx.stroke();}}
       if(p.psh>0&&(p.psh>60||((p.psh>>2)&1))){ // power shield: dashed bubble, blinks in its last second, flashes white when it soaks a hit
         ctx.setLineDash([3,2]); ctx.lineDashOffset=-(L.t>>1); ctx.strokeStyle=PAL[p.pshCool>70?1:13]; ctx.lineWidth=1;
-        ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,23,19,0,0,TAU); ctx.stroke(); ctx.setLineDash([]);}
+        ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,L.vert?19:23,L.vert?23:19,0,0,TAU); ctx.stroke(); ctx.setLineDash([]);}
       if(p.inv&&(p.inv>>2)%2)continue;
-      spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c,{mc1:p.mc||15}); if(L.t&2)rect(p.x-15,p.y,3,1,(L.t&4)?7:8);
-      if(p.pw.wing&&p.whp>0&&!(p.winv&&(p.winv>>2)%2)){spr(ETYPES.fighter.fr[((L.t/5)|0)%6],p.wx,p.wy,7,{flip:true,mc1:1});
-        for(let k=0;k<wingMax(p);k++)rect(p.wx-15+k*4,p.wy-14,3,2,k<p.whp?13:11);}
-      if(p.pw.ghost){ctx.globalAlpha=[0,0.3,0.4,0.5,0.65][p.pw.ghost]; spr(shipFrame(L.t+4),p.gx,p.gy,3); ctx.globalAlpha=1;}
+      spr(shipFrame(L.t+p.id*9),p.x,p.y,p.c,{mc1:p.mc||15,flip:!!L.vert&&p.face<0}); if(L.t&2)srect(L,p.x,p.y,L.vert&&p.face<0?12:-15,0,3,1,(L.t&4)?7:8);
+      if(p.pw.wing&&p.whp>0&&!(p.winv&&(p.winv>>2)%2)){spr(ETYPES.fighter.fr[((L.t/5)|0)%6],p.wx,p.wy,7,{flip:L.vert?p.face>0:true,mc1:1});
+        for(let k=0;k<wingMax(p);k++)srect(L,p.wx,p.wy,-15+k*4,-14,3,2,k<p.whp?13:11);}
+      if(p.pw.ghost){ctx.globalAlpha=[0,0.3,0.4,0.5,0.65][p.pw.ghost]; spr(shipFrame(L.t+4),p.gx,p.gy,3,{flip:!!L.vert&&p.face<0}); ctx.globalAlpha=1;}
       if(p.pw.drones)for(let k=0;k<p.pw.drones;k++){const o=dronePos(L,p,k); rect(o.x-2,o.y-1,5,3,13); rect(o.x-1,o.y-2,3,5,13); rect(o.x,o.y,1,1,(L.t>>3)&1?1:5);}
       if(p.pw.orbs)for(let k=0;k<p.pw.orbs;k++){const o=orbPos(p,k); rect(o.x-3,o.y-2,6,4,7); rect(o.x-2,o.y-3,4,6,7); rect(o.x-1,o.y-1,2,2,(L.t>>2)&1?1:8);}
-      if(p.pw.mega){ const hw=[0,1,2,3,4][p.pw.mega]; if(p.beam>0){const f=(L.t>>1)&1, x0=p.x+12; rect(x0,p.y-hw,W-x0,hw*2+1,f?14:6); rect(x0,p.y-hw+2,W-x0,Math.max(1,hw*2-3),3); rect(x0,p.y-1,W-x0,3,1);}
-        else if(p.mt>[0,205,165,125,95][p.pw.mega]&&((L.t>>1)&1)){rect(p.x+12,p.y-2,4,5,3); rect(p.x+13,p.y-1,2,3,1);} }
-      if(p.field>0){ctx.strokeStyle=PAL[(L.t>>1)&1?3:1]; for(let k=0;k<p.field;k++){ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,15+k*2,12+k*2,0,0,TAU); ctx.stroke();}}
+      if(p.pw.mega){ const hw=[0,1,2,3,4][p.pw.mega]; if(p.beam>0&&L.vert&&p.fy){const f=(L.t>>1)&1, y0=p.fy>0?p.y+12:0, ln=p.fy>0?PB-y0:p.y-12;   // sideways in a shaft
+          rect(p.x-hw,y0,hw*2+1,ln,f?14:6); rect(p.x-hw+2,y0,Math.max(1,hw*2-3),ln,3); rect(p.x-1,y0,3,ln,1);}
+        else if(p.beam>0){const f=(L.t>>1)&1, x0=p.x+12; rect(x0,p.y-hw,W-x0,hw*2+1,f?14:6); rect(x0,p.y-hw+2,W-x0,Math.max(1,hw*2-3),3); rect(x0,p.y-1,W-x0,3,1);}
+        else if(p.mt>[0,205,165,125,95][p.pw.mega]&&((L.t>>1)&1)){const nf=L.vert&&p.face<0; srect(L,p.x,p.y,nf?-16:12,-2,4,5,3); srect(L,p.x,p.y,nf?-15:13,-1,2,3,1);} }
+      if(p.field>0){ctx.strokeStyle=PAL[(L.t>>1)&1?3:1]; for(let k=0;k<p.field;k++){ctx.beginPath(); ctx.ellipse(p.x+0.5,p.y+0.5,L.vert?12+k*2:15+k*2,L.vert?15+k*2:12+k*2,0,0,TAU); ctx.stroke();}}
     }
     for(const a of L.arcs){ctx.strokeStyle=PAL[(a.t>>1)&1?1:14]; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a.pts[0].x+0.5,a.pts[0].y+0.5);
       for(let i=1;i<a.pts.length;i++){const A=a.pts[i-1],B=a.pts[i]; for(let s=1;s<=4;s++){const f=s/4; ctx.lineTo(A.x+(B.x-A.x)*f+(s<4?(L.r()-0.5)*8:0)+0.5,A.y+(B.y-A.y)*f+(s<4?(L.r()-0.5)*8:0)+0.5);}} ctx.stroke();}
     for(const f of L.fx){
-      if(f.text){txtO(f.text,f.x,f.y-12-f.t*0.4,f.c,5,'center');continue;}
+      if(f.hole)continue;
+      if(f.text){const [tx,ty]=vOff(L,f.x,f.y,0,-12-f.t*0.4); txtO(f.text,tx,ty,f.c,5,'center');continue;}
       if(f.puff){rect(f.x,f.y,1,1,f.t<5?7:12);continue;}
       if(f.spark){rect(f.x-1,f.y-1,3,3,1);continue;}
       if(f.splash){const wc=WATER[L.pi]; for(let k=0;k<6;k++){const dx=(k-2.5)*3, dy=-f.t*(1.8-Math.abs(k-2.5)*0.35)+f.t*f.t*0.07; rect(f.x+dx,f.y+dy,1,2,k%2?wc[2]:1);} continue;}
       if(f.t<0)continue; const fr=156+Math.min(6,(f.t/(f.big?4:3))|0); spr(fr,f.x,f.y,7,{mc1:f.big?1:10,mc3:2});
     }
-    ctx.restore(); if(L.vert){vmode(0); VXF=null;}
+    ctx.restore(); if(L.vert){vmode(0); VXF=null; VROT=0;}
     if(L.flash){ctx.globalAlpha=L.flash/20;rect(0,0,W,H,1);ctx.globalAlpha=1;}
     // HUD
     rect(0,0,W,12,0); rect(0,12,W,1,11);
